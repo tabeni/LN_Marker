@@ -14,30 +14,30 @@ library(scales)
 v_download <- "20260803"
 
 theme1<-theme(
-  panel.background = element_rect(fill = "transparent", colour = "black"),
-  panel.grid.major.y = element_line(color = "grey",linewidth=0.2),
-  panel.grid.major.x = element_line(color = "grey",linewidth=0.2),
-  panel.grid.minor = element_blank(),
-  strip.background = element_blank(),
-  legend.key = element_blank(),
-  strip.text.y = element_text(size = 18), 
-  strip.text.x = element_text(size = 18),
-  axis.title = element_text(size = 20),
-  legend.title = element_text(size = 20),
-  legend.text = element_text(size = 20),
-  legend.direction = "vertical",
+  panel.background=element_rect(fill="transparent", colour="black"),
+  panel.grid.major.y=element_line(color="grey",linewidth=0.2),
+  panel.grid.major.x=element_line(color="grey",linewidth=0.2),
+  panel.grid.minor=element_blank(),
+  strip.background=element_blank(),
+  legend.key=element_blank(),
+  strip.text.y=element_text(size=18), 
+  strip.text.x=element_text(size=18),
+  axis.title=element_text(size=20),
+  legend.title=element_text(size=20),
+  legend.text=element_text(size=20),
+  legend.direction="vertical",
   legend.position ="right",
-  plot.title = element_text(size = 20),
-  axis.text.x = element_text(angle = 90, hjust = 1,vjust = 0.5,size = 15),
-  axis.text.y = element_text(size = 15)
+  plot.title=element_text(size=20),
+  axis.text.x=element_text(angle=90, hjust=1,vjust=0.5,size=15),
+  axis.text.y=element_text(size=15)
 )
 
 #Directory Preparation----------------------------------------------------------
 
-if (dir.exists("../output/figure/main") == "FALSE") {dir.create("../output/figure/main", recursive = T)}
-if (dir.exists("../output/table/main") == "FALSE") {dir.create("../output/table/main", recursive = T)}
-if (dir.exists("../output/figure/other") == "FALSE") {dir.create("../output/figure/other", recursive = T)}
-if (dir.exists("../output/table/other") == "FALSE") {dir.create("../output/table/other", recursive = T)}
+if (dir.exists("../output/figure/main") == "FALSE") {dir.create("../output/figure/main", recursive=T)}
+if (dir.exists("../output/table/main") == "FALSE") {dir.create("../output/table/main", recursive=T)}
+if (dir.exists("../output/figure/other") == "FALSE") {dir.create("../output/figure/other", recursive=T)}
+if (dir.exists("../output/table/other") == "FALSE") {dir.create("../output/table/other", recursive=T)}
 v_path <- c(fig="../output/figure",
             fig_main="../output/figure/main",
             fig_other="../output/figure/other",
@@ -46,23 +46,23 @@ v_path <- c(fig="../output/figure",
 
 #define import-----------------------------------------------------------------
 
-df_define  <- read_csv("../define/define.csv", locale = locale(encoding = "shift-jis"),show_col_types = FALSE)%>%
+df_define  <- read_csv("../define/define.csv", locale=locale(encoding="shift-jis"),show_col_types=FALSE)%>%
   mutate(year1=as.character(year1))
 names(df_define$color_scenario)<-df_define$scenario1
 names(df_define$color_model)<-df_define$model2
 names(df_define$color_ar6)<-df_define$ar6_database
 
-df_variable <- read_csv("../define/variable.csv", locale = locale(encoding = "shift-jis"),show_col_types = FALSE)
+df_variable <- read_csv("../define/variable.csv", locale=locale(encoding="shift-jis"),show_col_types=FALSE)
 
 #ScenarioMIP Data import--------------------------------------------------------
 
-df_snap<-data.frame()
+df_snap_load<-data.frame()
 for (i in df_define$model4[!is.na(df_define$model4)]) {
-df_snap <- df_snap%>%
+  df_snap_load <- df_snap_load%>%
   bind_rows(read.csv(paste0("../data/",i,v_download,".csv"), header=T))
 }
-  
-df_snap <- df_snap%>%  
+# unique(df_snap$Variable)[grepl("Primary Energy",unique(df_snap$Variable))]
+df_snap <- df_snap_load%>%  
   filter(str_detect(Variable,paste(df_define$filter_variable,collapse="|")))%>%
   select(Model,Scenario,Region,Variable,Unit,X2020,X2025,X2030,X2035,X2040,X2045,X2050,X2055,X2060,X2065,X2070,X2075,X2080,X2085,X2090,X2095,X2100)%>%
   pivot_longer(cols=-c(Model,Scenario,Region,Variable,Unit), names_to='Year', values_to='Value', names_prefix='X')%>%
@@ -82,9 +82,10 @@ df_snap <- df_snap%>%
                         TRUE ~ Unit))%>%  
   filter(Region %in% c("World",df_define$region5 ))
 
+
 df_snap <- df_snap%>%
   bind_rows(df_snap%>%
-              filter(Variable=="GDP|MER")%>%
+              filter(Variable%in% "GDP|MER")%>%
               left_join(df_snap%>%
                           filter(Variable=="GDP|MER",Scenario_SSP=="SSP2_M")%>%
                           select(Model,BaUVal=Value,Year,Region))%>% 
@@ -92,12 +93,21 @@ df_snap <- df_snap%>%
                      Unit="%",
                      Variable="GDP change from SSP2_M")%>%
               select(-BaUVal))%>%
+  bind_rows(df_snap%>%
+              filter(Variable%in% "Consumption")%>%
+              left_join(df_snap%>%
+                          filter(Variable=="Consumption",Scenario_SSP=="SSP2_M")%>%
+                          select(Model,BaUVal=Value,Year,Region))%>% 
+              mutate(Value=(Value-BaUVal)*100/BaUVal,
+                     Unit="%",
+                     Variable="Consumption change from SSP2_M")%>%
+              select(-BaUVal)) %>% 
 filter(Model=="AIM"|Scenario_SSP=="SSP2_LN")
 
 df_snap <- df_snap%>%
   bind_rows(df_snap%>%
               filter(Variable %in% df_variable$air_pollutant_energy[!is.na(df_variable$air_pollutant_energy)])%>%
-              left_join(df_variable%>%select(air_pollutant,air_pollutant_energy),by=c("Variable" = "air_pollutant_energy"))%>%
+              left_join(df_variable%>%select(air_pollutant,air_pollutant_energy),by=c("Variable"="air_pollutant_energy"))%>%
               left_join(df_snap%>%
                           filter(Variable %in% df_variable$air_pollutant[!is.na(df_variable$air_pollutant)])%>%
                           select(Region,Unit,Variable,Year,Model,Scenario_SSP,tot=Value),
@@ -119,7 +129,7 @@ df_snap <- df_snap%>%
   filter(Model=="AIM"|Model=="GCAM"|Model=="WITCH")%>%
   mutate(Year=paste("X",Year,sep=""),
          Variable=paste(Variable,"cumulative",sep="|"))%>%
-  pivot_wider(names_from = Year, values_from = Value)%>%
+  pivot_wider(names_from=Year, values_from=Value)%>%
   mutate(X2100=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050+X2055+X2060+X2065+X2070+X2075+X2080+X2085+X2090+X2095+X2100/2)*5)%>%
   mutate(X2090=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050+X2055+X2060+X2065+X2070+X2075+X2080+X2085+X2090/2)*5)%>%
   mutate(X2080=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050+X2055+X2060+X2065+X2070+X2075+X2080/2)*5)%>% 
@@ -141,12 +151,12 @@ df_snap <- df_snap%>%
     Year == "X2080" ~ "2080",
     Year == "X2090" ~ "2090",
     Year == "X2100" ~ "2100"))%>%
-  mutate(Unit = str_replace_all(Unit, pattern="/yr", replacement="")))%>%
+  mutate(Unit=str_replace_all(Unit, pattern="/yr", replacement="")))%>%
   bind_rows(df_snap%>%
   filter(Model=="MESSAGEix-GLOBIOM"|Model=="REMIND-MAgPIE")%>%
   mutate(Year=paste("X",Year,sep=""),
          Variable=paste(Variable,"cumulative",sep="|"))%>%
-  pivot_wider(names_from = Year, values_from = Value)%>%
+  pivot_wider(names_from=Year, values_from=Value)%>%
   mutate(X2100=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050+X2055+X2060/2)*5+(X2060/2+X2070+X2080+X2090+X2100/2)*10)%>%
   mutate(X2090=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050+X2055+X2060/2)*5+(X2060/2+X2070+X2080+X2090/2)*10)%>%
   mutate(X2080=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050+X2055+X2060/2)*5+(X2060/2+X2070+X2080/2)*10)%>% 
@@ -169,12 +179,12 @@ df_snap <- df_snap%>%
     Year == "X2090" ~ "2090",
     Year == "X2100" ~ "2100"
   ))%>%
-    mutate(Unit = str_replace_all(Unit, pattern="/yr", replacement="")))%>%
+    mutate(Unit=str_replace_all(Unit, pattern="/yr", replacement="")))%>%
   bind_rows(df_snap%>%
               filter(Model=="IMAGE"|Model=="COFFEE")%>%
               mutate(Year=paste("X",Year,sep=""),
                      Variable=paste(Variable,"cumulative",sep="|"))%>%
-              pivot_wider(names_from = Year, values_from = Value)%>%
+              pivot_wider(names_from=Year, values_from=Value)%>%
               mutate(X2100=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050/2)*5+(X2050/2+X2060+X2070+X2080+X2090+X2100/2)*10)%>%
               mutate(X2090=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050/2)*5+(X2050/2+X2060+X2070+X2080+X2090/2)*10)%>%
               mutate(X2080=(X2020/2+X2025+X2030+X2035+X2040+X2045+X2050/2)*5+(X2050/2+X2060+X2070+X2080/2)*10)%>% 
@@ -197,11 +207,11 @@ df_snap <- df_snap%>%
                 Year == "X2090" ~ "2090",
                 Year == "X2100" ~ "2100"
               ))%>%
-              mutate(Unit = str_replace_all(Unit, pattern="/yr", replacement="")))%>%
+              mutate(Unit=str_replace_all(Unit, pattern="/yr", replacement="")))%>%
   bind_rows(df_snap%>%
   mutate(Year=paste("X",Year,sep=""),
          Variable=paste(Variable,"[2020=1]",sep=""))%>%
-  pivot_wider(names_from = Year, values_from = Value)%>%
+  pivot_wider(names_from=Year, values_from=Value)%>%
   mutate(X2100=(X2100/X2020))%>%
   mutate(X2090=(X2090/X2020))%>%
   mutate(X2080=(X2080/X2020))%>% 
@@ -228,7 +238,7 @@ df_snap <- df_snap%>%
   bind_rows(df_snap%>%
      mutate(Year=paste("X",Year,sep=""),
             Variable=paste(Variable,"[change from 2020]",sep=""))%>%
-     pivot_wider(names_from = Year, values_from = Value)%>%
+     pivot_wider(names_from=Year, values_from=Value)%>%
      mutate(X2100=(X2100-X2020))%>%
      mutate(X2090=(X2090-X2020))%>%
      mutate(X2080=(X2080-X2020))%>% 
@@ -277,9 +287,9 @@ for (i in df_define$model1[!is.na(df_define$model1)]) {
 
 df_AR6 <- read.csv("../data/AR6_Scenario_Database.csv", header=T)%>%
   filter(str_detect(Variable,paste(df_define$filter_variable,collapse="|")))%>%
-  pivot_longer(cols=!c(Model,Scenario,Region,Variable,Unit),names_to = "Year",values_to="Value", names_prefix='X')%>%
+  pivot_longer(cols=!c(Model,Scenario,Region,Variable,Unit),names_to="Year",values_to="Value", names_prefix='X')%>%
   filter(!(Value %in% NA))%>%
-  left_join(read.xlsx("../data/AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx",sheet = "meta_Ch3vetted_withclimate")%>%
+  left_join(read.xlsx("../data/AR6_Scenarios_Database_metadata_indicators_v1.1.xlsx",sheet="meta_Ch3vetted_withclimate")%>%
               select("Model","Scenario","Category"))%>%
   filter(!(Category %in% NA))%>%
   filter(Year %in% df_define$year1)%>%
@@ -328,7 +338,7 @@ df_AR6<-df_AR6%>%
 df_AR6 <- df_AR6%>%
   bind_rows(df_AR6%>%
               filter(Variable %in% df_variable$air_pollutant_energy[!is.na(df_variable$air_pollutant_energy)])%>%
-              left_join(df_variable%>%select(air_pollutant,air_pollutant_energy),by=c("Variable" = "air_pollutant_energy"))%>%
+              left_join(df_variable%>%select(air_pollutant,air_pollutant_energy),by=c("Variable"="air_pollutant_energy"))%>%
               left_join(df_AR6%>%
                           filter(Variable %in% df_variable$air_pollutant[!is.na(df_variable$air_pollutant)])%>%
                           select(Region,Unit,Variable,Year,Model,Scenario,Category,tot=Value),
@@ -349,7 +359,7 @@ df_AR6 <- df_AR6%>%
   bind_rows(df_AR6%>%
               mutate(Year=paste("X",Year,sep=""),
                      Variable=paste(Variable,"[change from 2020]",sep=""))%>%
-              pivot_wider(names_from = Year, values_from = Value)%>%
+              pivot_wider(names_from=Year, values_from=Value)%>%
               mutate(X2100=(X2100-X2020))%>%
               mutate(X2090=(X2090-X2020))%>%
               mutate(X2080=(X2080-X2020))%>% 
@@ -377,7 +387,7 @@ df_AR6 <- df_AR6%>%
 df_AR6 <- df_AR6%>%bind_rows(df_AR6%>%
               mutate(Year=paste("X",Year,sep=""),
                      Variable=paste(Variable,"cumulative",sep="|"))%>%
-              pivot_wider(names_from = Year, values_from = Value)%>%
+              pivot_wider(names_from=Year, values_from=Value)%>%
               mutate(X2100=(X2020/2+X2030+X2040+X2050+X2060+X2070+X2080+X2090+X2100/2)*10)%>%
               mutate(X2090=(X2020/2+X2030+X2040+X2050+X2060+X2070+X2080+X2090/2)*10)%>%
               mutate(X2080=(X2020/2+X2030+X2040+X2050+X2060+X2070+X2080/2)*10)%>% 
@@ -399,11 +409,11 @@ df_AR6 <- df_AR6%>%bind_rows(df_AR6%>%
                 Year == "X2080" ~ "2080",
                 Year == "X2090" ~ "2090",
                 Year == "X2100" ~ "2100"))%>%
-             mutate(Unit = str_replace_all(Unit, pattern="/yr", replacement="")))
+             mutate(Unit=str_replace_all(Unit, pattern="/yr", replacement="")))
 
 df_AR6_EmiRem<-df_AR6%>%
   filter(Variable=="Emissions|CO2|cumulative"|Variable=="Carbon Removal|Novel|cumulative"|Variable=="Carbon Removal|Conventional|cumulative")%>%
-  pivot_wider(names_from = Variable, values_from = Value)%>%
+  pivot_wider(names_from=Variable, values_from=Value)%>%
   filter(Year=="2100",Category=="C1"|Category=="C2"|Category=="C3"|Category=="C4")
 
 df_AR6<-df_AR6%>%
@@ -459,7 +469,7 @@ df_land <- read.csv("../data/Inputs_LandUse_E_All_Area_Groups_NOFLAG.csv", heade
   select(c("Area","Item","Unit","Y1990","Y2000","Y2010","Y2020"))%>%
   filter(Area=="World",Unit=="1000 ha")%>%
   pivot_longer(cols=-c(Area,Item,Unit), names_to='Year', values_to='Value', names_prefix='Y')%>%
-  replace_na(replace = list(Value = 0))
+  replace_na(replace=list(Value=0))
   
 df_land<-df_land%>%
   filter(Item=="Permanent meadows and pastures")%>%
@@ -487,7 +497,7 @@ df_land<-df_land%>%
   mutate(Unit="million ha",Variable="Land Cover|Forest|Planted[change from 2020]"))%>%
   bind_rows(df_land%>%
               filter(Item=="Forest land"|Item=="Planted Forest")%>%
-              pivot_wider(names_from = Item, values_from = Value)%>%
+              pivot_wider(names_from=Item, values_from=Value)%>%
               mutate(Unit="million ha",
                      Value=(`Forest land`-`Planted Forest`)/1000,
                      Variable="Land Cover|Forest|Natural[change from 2020]")%>%
@@ -497,7 +507,7 @@ df_land<-df_land%>%
 df_land<-df_land%>%
   left_join(df_land%>%
               filter(Year=="2020")%>%
-              pivot_wider(names_from = Year, values_from = Value),by=c("Area","Unit","Variable"))%>%
+              pivot_wider(names_from=Year, values_from=Value),by=c("Area","Unit","Variable"))%>%
   mutate(Value=Value-`2020`,
          Model="FAOstat",
          Variable= factor(Variable,levels=c("Land Cover|Other Natural[change from 2020]",
@@ -506,7 +516,7 @@ df_land<-df_land%>%
                                             "Land Cover|Pasture[change from 2020]",
                                             "Land Cover|Cropland|Non-Energy Crops[change from 2020]",
                                             "Land Cover|Cropland|Energy Crops[change from 2020]")),
-         Year = factor(Year,levels=c("1970","1980","1990","2000","2010","2020","2030","2040","2050","2060","2070","2080","2090","2100")))
+         Year=factor(Year,levels=c("1970","1980","1990","2000","2010","2020","2030","2040","2050","2060","2070","2080","2090","2100")))
 
 df_dummy<-data.frame(Year=factor(df_define$year2[!is.na(df_define$year2)],df_define$year2[!is.na(df_define$year2)]))%>%
   mutate(Value=0)
@@ -515,126 +525,120 @@ df_dummy<-data.frame(Year=factor(df_define$year2[!is.na(df_define$year2)],df_def
 
 #line plot
 f_fig_line1 <- function(v_name, v_var) {
-  df_fig1<-filter(df_snap,Variable %in% v_var, 
-                  Model=="AIM", Region=="World",
-                  Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
-    mutate(Variable = factor(Variable,levels=v_var),
-           Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
-           Scenario = factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
-                  Scenario=="LN", Region=="World")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
-                  Scenario=="LN", Region=="World")%>%
-    summarise(max=max(Value),min=min(Value),.by = c(Scenario,Year,Region,Variable,Unit))%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+  df_fig1<-filter(df_snap,Variable %in% v_var, Model=="AIM", Region=="World",Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
+    mutate(Variable=factor(Variable,levels=v_var),Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+    mutate(Variable=factor(Variable,levels=v_var))
+  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+    summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
+    mutate(Variable=factor(Variable,levels=v_var))
   df_fig4<-filter(df_AR6,Variable %in% v_var, Region=="World", Year=="2100")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
   p<-ggplot() +
-    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
+    geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
     geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
-    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend = FALSE) +  
-    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend = FALSE) +  
-    facet_wrap(Variable~Unit,scales = "free",nrow=2) +
+    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend=FALSE) +  
+    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend=FALSE) +  
+    facet_wrap(Variable~Unit,scales="free",nrow=2) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
     scale_colour_manual(values=c(df_define$color_scenario)) +
     ylab("") + xlab("Year") + theme1 
-  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)/2*1800+450, height = 3200,res = 300)
+  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)/2*1800+450, height=3200,res=300)
   print(p)
   dev.off()
 }
+
+
 f_fig_line2 <- function(v_name, v_var) {
-  df_fig1<-filter(df_snap,Variable %in% v_var, 
-                  Model=="AIM", Region=="World",
-                  Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
-    mutate(Variable = factor(Variable,levels=v_var),
-           Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
-           Scenario = factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
-                  Scenario=="LN", Region=="World")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
-                  Scenario=="LN", Region=="World")%>%
-    summarise(max=max(Value),min=min(Value),.by = c(Scenario,Year,Region,Variable,Unit))%>%
-    mutate(Variable = factor(Variable,levels=v_var))
-  df_fig4<-filter(df_AR6,Variable %in% v_var, Region=="World", Year=="2100")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+  df_fig1<-filter(df_snap,Variable %in% v_var, Model=="AIM",Region=="World",Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>% mutate(Variable=factor(Variable,levels=v_var),Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)]),Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+    mutate(Variable=factor(Variable,levels=v_var))
+  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+    summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
+    mutate(Variable=factor(Variable,levels=v_var))
+  df_fig4<-filter(df_AR6,Variable %in% v_var,Region=="World",Year=="2100")%>%
+    mutate(Variable=factor(Variable,levels=v_var))
   p<-ggplot() +
-    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
+    geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
     geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
-    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend = FALSE) +  
-    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend = FALSE) +  
-    facet_wrap(Variable~Unit,scales = "free",nrow=1) +
+    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend=FALSE) +  
+    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend=FALSE) +  
+    facet_wrap(Variable~Unit,scales="free",nrow=1) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
     scale_colour_manual(values=c(df_define$color_scenario)) +
     ylab("") + xlab("Year") + theme1 
-  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)*1800+450, height = 1800,res = 300)
+  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)*1800+450, height=1800,res=300)
   print(p)
   dev.off()
 }
+
 f_fig_line3 <- function(v_name, v_var) {
   df_fig1<-filter(df_snap,Variable %in% v_var, 
                   Model=="AIM", Region %in% df_define$region5,
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
-    mutate(Variable = factor(Variable,levels=v_var),
-           Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)]),
-           Scenario = factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+    mutate(Variable=factor(Variable,levels=v_var),
+           Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)]),
+           Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
   df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region %in% df_define$region5)%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
   df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region %in% df_define$region5)%>%
-    summarise(max=max(Value),min=min(Value),.by = c(Scenario,Year,Region,Variable,Unit))%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
+    mutate(Variable=factor(Variable,levels=v_var))
   df_fig4<-filter(df_AR6,Variable %in% v_var, Region %in% df_define$region5, Year=="2100")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
   p<-ggplot() +
-    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
+    geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
     geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
-    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend = FALSE) +  
-    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend = FALSE) +  
-    facet_wrap(Variable~Region,scales = "free",nrow=3) +
+    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend=FALSE) +  
+    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend=FALSE) +  
+    facet_wrap(Variable~Region,scales="free",nrow=3) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
     scale_colour_manual(values=c(df_define$color_scenario)) +
-    ylab("") + xlab("Year") + theme1 + theme(legend.direction = "horizontal", legend.position ="bottom",  legend.title = element_text(size = 25), legend.text = element_text(size = 25),)
-  png(paste(v_path["fig_main"],"/",v_name,"_line_region5.png",sep=""), width = 6000, height = 6000,res = 300)
+    ylab("") + xlab("Year") + theme1 + theme(legend.direction="horizontal", legend.position ="bottom",  legend.title=element_text(size=25), legend.text=element_text(size=25),)
+  png(paste(v_path["fig_main"],"/",v_name,"_line_region5.png",sep=""), width=6000, height=6000,res=300)
   print(p)
   dev.off()
 }
 f_fig_line4 <- function(v_name, v_var) {
+  # lines show all AIM scenario (SSP3_H, SSP2_M, SSP5_HL, SSP2_ML, SSP2_L, SSP1_VL, SSP2_LN)
   df_fig1<-filter(df_snap,Variable %in% v_var, 
                   Model=="AIM", Region=="World",
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
-    mutate(Variable = factor(Variable,levels=v_var),
-           Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
-           Scenario = factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+    mutate(Variable=factor(Variable,levels=v_var),
+           Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
+           Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+  # lines showing all LN scenario 
   df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
+  # shaded ribbon showing all LN scenario from all other models
   df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
-    summarise(max=max(Value),min=min(Value),.by = c(Scenario,Year,Region,Variable,Unit))%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
+    mutate(Variable=factor(Variable,levels=v_var))
+  # AR6 data for 2100
   df_fig4<-filter(df_AR6,Variable %in% v_var, Region=="World", Year=="2100")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
   p<-ggplot() +
-    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
+    geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
     geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category,color=Category),alpha=0.4,linewidth=5) +  
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category,color=Category),alpha=0.5,linewidth=5) +  
-    facet_wrap(Variable~Unit,scales = "free",nrow=1) +
+    facet_wrap(Variable~Unit,scales="free",nrow=1) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
     scale_colour_manual(values=c(df_define$color_scenario)) +
     ylab("") + xlab("Year") + theme1 
-  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)*1800+450, height = 1800,res = 300)
+  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)*1800+450, height=1800,res=300)
   print(p)
   dev.off()
 }
@@ -642,29 +646,29 @@ f_fig_line5 <- function(v_name, v_var) {
   df_fig1<-filter(df_snap,Variable %in% v_var, 
                   Model=="AIM", Region=="World",
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
-    mutate(Variable = factor(Variable,levels=v_var),
-           Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ))
+    mutate(Variable=factor(Variable,levels=v_var),
+           Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ))
   df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
   df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
-    summarise(max=max(Value),min=min(Value),.by = c(Scenario,Year,Region,Variable,Unit))%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
+    mutate(Variable=factor(Variable,levels=v_var))
   df_fig4<-filter(df_AR6,Variable %in% v_var, Region=="World", Year=="2100")%>%
-    mutate(Variable = factor(Variable,levels=v_var))
+    mutate(Variable=factor(Variable,levels=v_var))
   p<-ggplot() +
-#    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
+#    geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
     geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category,color=Category),alpha=0.4,linewidth=5) +  
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category,color=Category),alpha=0.5,linewidth=5) +  
-    facet_wrap(Variable~Unit,scales = "free",nrow=3) +
+    facet_wrap(Variable~Unit,scales="free",nrow=3) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
     scale_colour_manual(values=c(df_define$color_scenario)) +
     ylab("") + xlab("Year") + theme1 
-  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)/3*2400+800, height = 5200,res = 300)
+  png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)/3*2400+800, height=5200,res=300)
   print(p)
   dev.off()
 }
@@ -673,22 +677,22 @@ f_fig_area <- function(v_name, v_area, v_line) {
 df_fig1<-df_snap%>%
   filter(Variable %in% v_area,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
   mutate(Variable=factor(Variable, levels=v_area),
-         Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
-         Scenario = factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+         Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
+         Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
 df_fig2<-df_snap%>%
   filter(Variable %in% v_line, Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
   mutate(Variable=factor(Variable, levels=v_line),
-         Scenario_SSP = factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ))
+         Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ))
 p<-ggplot() +
   geom_area(data=df_fig1,aes(x=Year,y=Value,group=Variable,fill=Variable),linewidth=1, alpha=0.7)+
-  geom_line(data = df_fig2, aes(x=Year,y=Value,group=Variable,linetype=Variable), alpha=0.7)+
-  geom_hline(yintercept=0,linetype="longdash",color = "black") +
+  geom_line(data=df_fig2, aes(x=Year,y=Value,group=Variable,linetype=Variable), alpha=0.7)+
+  geom_hline(yintercept=0,linetype="longdash",color="black") +
   scale_fill_manual(values=df_define$color_palette) +
-  facet_wrap(Scenario_SSP~.,scales = "fixed",nrow=1) +
+  facet_wrap(Scenario_SSP~.,scales="fixed",nrow=1) +
   scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)]))+
-  ylab("") + xlab("") + labs(fill = "Category", linetype = "") + theme1 +theme(legend.position="bottom")+guides(fill = guide_legend(ncol = 2),linetype = guide_legend(ncol = 1))
+  ylab("") + xlab("") + labs(fill="Category", linetype="") + theme1 +theme(legend.position="bottom")+guides(fill=guide_legend(ncol=2),linetype=guide_legend(ncol=1))
   scale_x_discrete(breaks=df_define$year1[!is.na(df_define$year1)])
-png(paste(v_path["fig_main"],"/",v_name,"area_.png",sep=""), width = length(df_define$marker_scenario[!is.na(df_define$marker_scenario)])*800, height = 2400+length(v_area)*20,res = 300)
+png(paste(v_path["fig_main"],"/",v_name,"area_.png",sep=""), width=length(df_define$marker_scenario[!is.na(df_define$marker_scenario)])*800, height=2400+length(v_area)*20,res=300)
 print(p)
 dev.off()
 }
@@ -697,35 +701,38 @@ f_fig_bar <- function(v_name, v_area, v_point) {
   df_fig1<-df_snap%>%
     filter(Year=="2050"|Year=="2100",Variable %in% v_area,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
     mutate(Variable=factor(Variable, levels=v_area),
-           Scenario_SSP_Model = factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]),
-           Scenario = factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+           Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]),
+           Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
   df_fig2<-df_snap%>%
     filter(Year=="2050"|Year=="2100",Variable %in% v_area, Region=="World",Scenario=="LN",Model!="AIM")%>%
     mutate(Variable=factor(Variable, levels=v_area),
-           Scenario_SSP_Model = factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))  
+           Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))  
   df_fig3<-df_snap%>%
     filter(Year=="2050"|Year=="2100",Variable %in% v_point, Region=="World",Scenario=="LN",Model!="AIM")%>%
     mutate(Variable=factor(Variable, levels=v_point),
-           Scenario_SSP_Model = factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))%>%
+           Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))%>%
     bind_rows(df_snap%>%
                 filter(Year=="2050"|Year=="2100",Variable %in% v_point,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
                 mutate(Variable=factor(Variable, levels=v_point),
-                       Scenario_SSP_Model = factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)])))
+                       Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)])))
   p<-ggplot() +
     geom_bar(data=df_fig1,aes(x=Scenario_SSP_Model,y=Value,group=Variable,fill=Variable),stat="identity", alpha=0.7)+
     geom_bar(data=df_fig2,aes(x=Scenario_SSP_Model,y=Value,group=Variable,fill=Variable),stat="identity", alpha=0.7)+
-    geom_point(data = df_fig3, aes(x=Scenario_SSP_Model,y=Value,group=Variable,shape=Variable), alpha=0.8,size=4,stroke=1.2)+
-    geom_hline(yintercept=0,linetype="longdash",color = "black") +
+    geom_point(data=df_fig3, aes(x=Scenario_SSP_Model,y=Value,group=Variable,shape=Variable), alpha=0.8,size=4,stroke=1.2)+
+    geom_hline(yintercept=0,linetype="longdash",color="black") +
     scale_fill_manual(values=df_define$color_palette) +
     scale_shape_manual(values=c(4,2,3,5)) +
-    facet_wrap(Year~.,scales = "fixed",nrow=1) +
-    ylab("") + xlab("") + labs(fill = "Category", linetype = "") + theme1 +
-  png(paste(v_path["fig_main"],"/",v_name,"_bar.png",sep=""), width = 5000, height = 3000,res = 300)
+    facet_wrap(Year~.,scales="fixed",nrow=1) +
+    ylab("") + xlab("") + labs(fill="Category", linetype="") + theme1 +
+  png(paste(v_path["fig_main"],"/",v_name,"_bar.png",sep=""), width=5000, height=3000,res=300)
   print(p)
   dev.off()
 }
 
 #Plot------------------------------------
+openxlsx::write.xlsx(df_snap %>% filter(Variable %in% df_variable$economic_impact[!is.na(df_variable$economic_impact)]) %>% pivot_wider(names_from = "Year", values_from = "Value"), file = paste(v_path["tab"],"/","Economic_indicator.xlsx",sep=""), overwrite = TRUE)
+
+openxlsx::write.xlsx(df_snap %>% filter(Variable %in% df_variable$GHG[!is.na(df_variable$GHG)]) %>% pivot_wider(names_from = "Year", values_from = "Value"), file = paste(v_path["tab"],"/","GHG_Emissions.xlsx",sep=""), overwrite = TRUE)
 
 f_fig_line1("GHG_Emissions",df_variable$GHG[!is.na(df_variable$GHG)])
 f_fig_line1("Air_Pollutant",df_variable$air_pollutant[!is.na(df_variable$air_pollutant)])

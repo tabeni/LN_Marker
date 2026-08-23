@@ -61,7 +61,11 @@ for (i in df_define$model4[!is.na(df_define$model4)]) {
   df_snap_load <- df_snap_load%>%
   bind_rows(read.csv(paste0("../data/",i,v_download,".csv"), header=T))
 }
+
+df_snap_load %>% filter(grepl("^Consumption",Variable), Region == "World") %>% openxlsx::write.xlsx("../output/table/Consumption_data.xlsx")
+df_snap_load %>% filter(grepl("^GDP",Variable),  Region == "World") %>% openxlsx::write.xlsx("../output/table/GDP_data.xlsx")
 # unique(df_snap$Variable)[grepl("Primary Energy",unique(df_snap$Variable))]
+
 df_snap <- df_snap_load%>%  
   filter(str_detect(Variable,paste(df_define$filter_variable,collapse="|")))%>%
   select(Model,Scenario,Region,Variable,Unit,X2020,X2025,X2030,X2035,X2040,X2045,X2050,X2055,X2060,X2065,X2070,X2075,X2080,X2085,X2090,X2095,X2100)%>%
@@ -82,7 +86,7 @@ df_snap <- df_snap_load%>%
                         TRUE ~ Unit))%>%  
   filter(Region %in% c("World",df_define$region5 ))
 
-
+## GDP and consumption changes --------
 df_snap <- df_snap%>%
   bind_rows(df_snap%>%
               filter(Variable%in% "GDP|MER")%>%
@@ -102,8 +106,28 @@ df_snap <- df_snap%>%
                      Unit="%",
                      Variable="Consumption change from SSP2_M")%>%
               select(-BaUVal)) %>% 
+  bind_rows(df_snap%>%
+              filter(Variable%in% "GDP|MER")%>%
+              left_join(df_snap%>%
+                          filter(Variable=="GDP|MER",Year=="2020")%>%
+                          select(Model,BaseYearVal=Value,Scenario_SSP, Region))%>% 
+              mutate(Value=(Value/(1.03)^(as.numeric(as.character(Year))-2020)-BaseYearVal)*100/BaseYearVal,
+                     Unit="%",
+                     Variable="GDP change from 2020|discount rate 3%")%>%
+              select(-BaseYearVal))%>%
+  bind_rows(df_snap%>%
+              filter(Variable%in% "Consumption")%>%
+              left_join(df_snap%>%
+                          filter(Variable=="Consumption",Year=="2020")%>%
+                          select(Model,BaseYearVal=Value,Scenario_SSP, Region))%>% 
+              mutate(Value=(Value/(1.03)^(as.numeric(as.character(Year))-2020)-BaseYearVal)*100/BaseYearVal,
+                     Unit="%",
+                     Variable="Consumption change from 2020|discount rate 3%")%>%
+              select(-BaseYearVal)) %>% 
 filter(Model=="AIM"|Scenario_SSP=="SSP2_LN")
 
+
+## air pollution ---------
 df_snap <- df_snap%>%
   bind_rows(df_snap%>%
               filter(Variable %in% df_variable$air_pollutant_energy[!is.na(df_variable$air_pollutant_energy)])%>%

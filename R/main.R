@@ -86,27 +86,99 @@ df_snap <- df_snap_load%>%
                         TRUE ~ Unit))%>%  
   filter(Region %in% c("World",df_define$region5 ))
 
+
+
+## GDP and consumption changes (cumulative) --------
+# linear interpolation
+F_linear_inter <- function(df){
+  group_cols <- setdiff(names(df),c("Year", "Value"))
+  
+  df_out <- df %>%
+    mutate(Year_num = as.numeric(Year)) %>%
+    group_by(across(all_of(group_cols))) %>%
+    complete(Year_num = seq(min(Year_num), max(Year_num), by = 1)) %>%
+    arrange(Year_num, .by_group = TRUE) %>%
+    mutate(
+      Value = approx(
+        x = Year_num[!is.na(Value)],
+        y = Value[!is.na(Value)],
+        xout = Year_num,
+        method = "linear",
+        rule = 1
+      )$y,
+      Year = as.character(Year_num)
+    ) %>%
+    select(-Year_num) %>%
+    ungroup()
+  return(df_out)
+}
+
+F_cum <- function(df){
+  # cumulative from 2020 to 2100
+  group_cols <- setdiff(names(df),c("Year", "Value"))
+  df_out <- df %>%   mutate(Year_num = as.numeric(as.character(Year))) %>%
+    filter(Year_num >= 2020) %>% 
+    group_by(across(all_of(group_cols))) %>%
+    arrange(Year_num, .by_group = TRUE) %>%
+    mutate(Value = cumsum(Value), Variable = paste0("Cumulative ", Variable)) %>%
+    ungroup() %>%
+    select(-Year_num)
+}
+
+df_snap_cum <- df_snap %>% filter(Variable%in% c("GDP|MER", "Consumption")) %>% F_linear_inter() %>% F_cum() %>% filter(Year %in% as.character(seq(2020,2100,5)))
+
+df_snap_cum_change <- df_snap_cum %>% 
+  left_join(df_snap_cum %>%
+              filter(Scenario=="M")%>%
+              select(Variable, Model,BaUVal=Value,Year,SSP,Region))%>% 
+  mutate(Value=(Value-BaUVal)*100/BaUVal,
+         Unit="%",
+         Variable=paste0("Change in ", Variable))%>%
+  select(-BaUVal) %>% filter(!is.na(Value)) %>% 
+  mutate(Model_scenario=paste(Model, Scenario_SSP, sep="_")) %>% 
+  filter(Model_scenario %in% df_define$scenario_model[!is.na(df_define$scenario_model)]) %>% 
+  select(-Model_scenario)
+
+
 ## GDP and consumption changes --------
 df_snap <- df_snap%>%
-  bind_rows(df_snap%>%
+  bind_rows(df_snap%>% # change compared with SSP2_M
               filter(Variable%in% "GDP|MER")%>%
               left_join(df_snap%>%
                           filter(Variable=="GDP|MER",Scenario_SSP=="SSP2_M")%>%
-                          select(Model,BaUVal=Value,Year,Region))%>% 
-              mutate(Value=(Value-BaUVal)*100/BaUVal,
+                          select(Model,BaUVal_SSP2=Value,Year,Region))%>% 
+              mutate(Value=(Value-BaUVal_SSP2)*100/BaUVal_SSP2,
                      Unit="%",
                      Variable="GDP change from SSP2_M")%>%
-              select(-BaUVal))%>%
+              select(-BaUVal_SSP2))%>%
   bind_rows(df_snap%>%
               filter(Variable%in% "Consumption")%>%
               left_join(df_snap%>%
                           filter(Variable=="Consumption",Scenario_SSP=="SSP2_M")%>%
-                          select(Model,BaUVal=Value,Year,Region))%>% 
-              mutate(Value=(Value-BaUVal)*100/BaUVal,
+                          select(Model,BaUVal_SSP2=Value,Year,Region))%>% 
+              mutate(Value=(Value-BaUVal_SSP2)*100/BaUVal_SSP2,
                      Unit="%",
                      Variable="Consumption change from SSP2_M")%>%
-              select(-BaUVal)) %>% 
+              select(-BaUVal_SSP2)) %>% 
+  bind_rows(df_snap%>% # change compared with its own SSP-M
+              filter(Variable%in% "GDP|MER")%>%
+              left_join(df_snap%>%
+                          filter(Variable=="GDP|MER",Scenario=="M")%>%
+                          select(Model,BaUVal=Value,Year,SSP,Region))%>% 
+              mutate(Value=(Value-BaUVal)*100/BaUVal,
+                     Unit="%",
+                     Variable="GDP change from Medium")%>%
+              select(-BaUVal) %>% filter(!is.na(Value)))%>%
   bind_rows(df_snap%>%
+              filter(Variable%in% "Consumption")%>%
+              left_join(df_snap%>%
+                          filter(Variable=="Consumption",Scenario=="M")%>%
+                          select(Model,BaUVal=Value,Year,SSP,Region))%>% 
+              mutate(Value=(Value-BaUVal)*100/BaUVal,
+                     Unit="%",
+                     Variable="Consumption change from Medium")%>%
+              select(-BaUVal) %>% filter(!is.na(Value))) %>% 
+  bind_rows(df_snap%>% # change compared with 2020, discount rate 3%
               filter(Variable%in% "GDP|MER")%>%
               left_join(df_snap%>%
                           filter(Variable=="GDP|MER",Year=="2020")%>%
@@ -125,6 +197,7 @@ df_snap <- df_snap%>%
                      Variable="Consumption change from 2020|discount rate 3%")%>%
               select(-BaseYearVal)) %>% 
 filter(Model=="AIM"|Scenario_SSP=="SSP2_LN")
+
 
 
 ## air pollution ---------
@@ -548,12 +621,12 @@ df_dummy<-data.frame(Year=factor(df_define$year2[!is.na(df_define$year2)],df_def
 #define function----------------------------------------------------------------
 
 #line plot
-f_fig_line1 <- function(v_name, v_var) {
-  df_fig1<-filter(df_snap,Variable %in% v_var, Model=="AIM", Region=="World",Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
+f_fig_line1 <- function(df=df_snap, v_name, v_var) {
+  df_fig1<-filter(df,Variable %in% v_var, Model=="AIM", Region=="World",Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
     mutate(Variable=factor(Variable,levels=v_var),Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+  df_fig2<-filter(df,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
     mutate(Variable=factor(Variable,levels=v_var))
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+  df_fig3<-filter(df,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
     summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
     mutate(Variable=factor(Variable,levels=v_var))
   df_fig4<-filter(df_AR6,Variable %in% v_var, Region=="World", Year=="2100")%>%
@@ -575,11 +648,11 @@ f_fig_line1 <- function(v_name, v_var) {
 }
 
 
-f_fig_line2 <- function(v_name, v_var) {
-  df_fig1<-filter(df_snap,Variable %in% v_var, Model=="AIM",Region=="World",Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>% mutate(Variable=factor(Variable,levels=v_var),Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)]),Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+f_fig_line2 <- function(df=df_snap, v_name, v_var) {
+  df_fig1<-filter(df,Variable %in% v_var, Model=="AIM",Region=="World",Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>% mutate(Variable=factor(Variable,levels=v_var),Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)]),Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+  df_fig2<-filter(df,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
     mutate(Variable=factor(Variable,levels=v_var))
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
+  df_fig3<-filter(df,Variable %in% v_var, Year %in% df_define$year1,Scenario=="LN", Region=="World")%>%
     summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
     mutate(Variable=factor(Variable,levels=v_var))
   df_fig4<-filter(df_AR6,Variable %in% v_var,Region=="World",Year=="2100")%>%
@@ -600,17 +673,17 @@ f_fig_line2 <- function(v_name, v_var) {
   dev.off()
 }
 
-f_fig_line3 <- function(v_name, v_var) {
-  df_fig1<-filter(df_snap,Variable %in% v_var, 
+f_fig_line3 <- function(df=df_snap, v_name, v_var) {
+  df_fig1<-filter(df,Variable %in% v_var, 
                   Model=="AIM", Region %in% df_define$region5,
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
     mutate(Variable=factor(Variable,levels=v_var),
            Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)]),
            Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
+  df_fig2<-filter(df,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region %in% df_define$region5)%>%
     mutate(Variable=factor(Variable,levels=v_var))
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
+  df_fig3<-filter(df,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region %in% df_define$region5)%>%
     summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
     mutate(Variable=factor(Variable,levels=v_var))
@@ -631,20 +704,20 @@ f_fig_line3 <- function(v_name, v_var) {
   print(p)
   dev.off()
 }
-f_fig_line4 <- function(v_name, v_var) {
+f_fig_line4 <- function(df=df_snap, v_name, v_var) {
   # lines show all AIM scenario (SSP3_H, SSP2_M, SSP5_HL, SSP2_ML, SSP2_L, SSP1_VL, SSP2_LN)
-  df_fig1<-filter(df_snap,Variable %in% v_var, 
+  df_fig1<-filter(df,Variable %in% v_var, 
                   Model=="AIM", Region=="World",
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
     mutate(Variable=factor(Variable,levels=v_var),
            Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
            Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
   # lines showing all LN scenario 
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
+  df_fig2<-filter(df,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
     mutate(Variable=factor(Variable,levels=v_var))
   # shaded ribbon showing all LN scenario from all other models
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
+  df_fig3<-filter(df,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
     summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
     mutate(Variable=factor(Variable,levels=v_var))
@@ -666,16 +739,16 @@ f_fig_line4 <- function(v_name, v_var) {
   print(p)
   dev.off()
 }
-f_fig_line5 <- function(v_name, v_var) {
-  df_fig1<-filter(df_snap,Variable %in% v_var, 
+f_fig_line5 <- function(df=df_snap, v_name, v_var) {
+  df_fig1<-filter(df,Variable %in% v_var, 
                   Model=="AIM", Region=="World",
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
     mutate(Variable=factor(Variable,levels=v_var),
            Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ))
-  df_fig2<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
+  df_fig2<-filter(df,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
     mutate(Variable=factor(Variable,levels=v_var))
-  df_fig3<-filter(df_snap,Variable %in% v_var, Year %in% df_define$year1,
+  df_fig3<-filter(df,Variable %in% v_var, Year %in% df_define$year1,
                   Scenario=="LN", Region=="World")%>%
     summarise(max=max(Value),min=min(Value),.by=c(Scenario,Year,Region,Variable,Unit))%>%
     mutate(Variable=factor(Variable,levels=v_var))
@@ -697,13 +770,13 @@ f_fig_line5 <- function(v_name, v_var) {
   dev.off()
 }
 #area plot
-f_fig_area <- function(v_name, v_area, v_line) {
-df_fig1<-df_snap%>%
+f_fig_area <- function(df=df_snap, v_name, v_area, v_line) {
+df_fig1<-df%>%
   filter(Variable %in% v_area,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
   mutate(Variable=factor(Variable, levels=v_area),
          Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ),
          Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-df_fig2<-df_snap%>%
+df_fig2<-df%>%
   filter(Variable %in% v_line, Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
   mutate(Variable=factor(Variable, levels=v_line),
          Scenario_SSP=factor(Scenario_SSP,levels=df_define$marker_scenario[!is.na(df_define$marker_scenario)] ))
@@ -721,21 +794,21 @@ print(p)
 dev.off()
 }
 #bar plot
-f_fig_bar <- function(v_name, v_area, v_point) {
-  df_fig1<-df_snap%>%
+f_fig_bar1 <- function(df=df_snap, v_name, v_area, v_point) {
+  df_fig1<-df%>%
     filter(Year=="2050"|Year=="2100",Variable %in% v_area,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
     mutate(Variable=factor(Variable, levels=v_area),
            Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]),
            Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
-  df_fig2<-df_snap%>%
+  df_fig2<-df%>%
     filter(Year=="2050"|Year=="2100",Variable %in% v_area, Region=="World",Scenario=="LN",Model!="AIM")%>%
     mutate(Variable=factor(Variable, levels=v_area),
            Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))  
-  df_fig3<-df_snap%>%
+  df_fig3<-df%>%
     filter(Year=="2050"|Year=="2100",Variable %in% v_point, Region=="World",Scenario=="LN",Model!="AIM")%>%
     mutate(Variable=factor(Variable, levels=v_point),
            Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))%>%
-    bind_rows(df_snap%>%
+    bind_rows(df%>%
                 filter(Year=="2050"|Year=="2100",Variable %in% v_point,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
                 mutate(Variable=factor(Variable, levels=v_point),
                        Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)])))
@@ -753,11 +826,48 @@ f_fig_bar <- function(v_name, v_area, v_point) {
   dev.off()
 }
 
+f_fig_bar2 <- function(df=df_snap, v_name, v_area, v_point) {
+  # df <- df_snap_cum_change
+  # v_name <- "Economic_impact_cumulative"
+  # v_area <- df_variable$economic_impact_cumulative[!is.na(df_variable$economic_impact_cumulative)]
+  # v_point <- "Cumulative economic impacts"
+  
+  df_fig1<-df%>%
+    filter(Year=="2050"|Year=="2100",Variable %in% v_area,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
+    mutate(Variable=factor(Variable, levels=v_area),
+           Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]),
+           Scenario=factor(Scenario,levels=df_define$scenario1[!is.na(df_define$scenario1)]))
+  df_fig2<-df%>%
+    filter(Year=="2050"|Year=="2100",Variable %in% v_area, Region=="World",Scenario=="LN",Model!="AIM")%>%
+    mutate(Variable=factor(Variable, levels=v_area),
+           Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))  
+  df_fig3<-df%>%
+    filter(Year=="2050"|Year=="2100",Variable %in% v_point, Region=="World",Scenario=="LN",Model!="AIM")%>%
+    mutate(Variable=factor(Variable, levels=v_point),
+           Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)]))%>%
+    bind_rows(df%>%
+                filter(Year=="2050"|Year=="2100",Variable %in% v_point,Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)], Region=="World",Model=="AIM")%>%
+                mutate(Variable=factor(Variable, levels=v_point),
+                       Scenario_SSP_Model=factor(paste0(Model,"_",Scenario_SSP),levels= df_define$scenario_model[!is.na(df_define$scenario_model)])))
+  p<-ggplot() +
+    geom_bar(data=df_fig1,aes(x=Scenario_SSP_Model,y=Value,group=Variable,fill=Variable),stat="identity", alpha=0.7)+
+    geom_bar(data=df_fig2,aes(x=Scenario_SSP_Model,y=Value,group=Variable,fill=Variable),stat="identity", alpha=0.7)+
+    geom_point(data=df_fig3, aes(x=Scenario_SSP_Model,y=Value,group=Variable,shape=Variable), alpha=0.8,size=4,stroke=1.2)+
+    geom_hline(yintercept=0,linetype="longdash",color="black") +
+    scale_fill_manual(values=df_define$color_palette) +
+    scale_shape_manual(values=c(4,2,3,5)) +
+    facet_wrap(Variable~Year,scales="fixed",nrow=2) +
+    ylab("") + xlab("") + labs(fill="Category", linetype="") + theme1 +
+    png(paste(v_path["fig_main"],"/",v_name,"_bar.png",sep=""), width=5000, height=4000,res=300)
+  print(p)
+  dev.off()
+}
 #Plot------------------------------------
 openxlsx::write.xlsx(df_snap %>% filter(Variable %in% df_variable$economic_impact[!is.na(df_variable$economic_impact)]) %>% pivot_wider(names_from = "Year", values_from = "Value"), file = paste(v_path["tab"],"/","Economic_indicator.xlsx",sep=""), overwrite = TRUE)
 
 openxlsx::write.xlsx(df_snap %>% filter(Variable %in% df_variable$GHG[!is.na(df_variable$GHG)]) %>% pivot_wider(names_from = "Year", values_from = "Value"), file = paste(v_path["tab"],"/","GHG_Emissions.xlsx",sep=""), overwrite = TRUE)
 
+## line plots ------------------------------------
 f_fig_line1("GHG_Emissions",df_variable$GHG[!is.na(df_variable$GHG)])
 f_fig_line1("Air_Pollutant",df_variable$air_pollutant[!is.na(df_variable$air_pollutant)])
 f_fig_line1("CDR_CCS",df_variable$CDR_CCS[!is.na(df_variable$CDR_CCS)])  
@@ -769,7 +879,7 @@ f_fig_line2("Agricultural_Production","Agricultural Production")
 f_fig_line3("Food_Availability",df_variable$food[!is.na(df_variable$food)])
 f_fig_line4("Economic_indicator",df_variable$economic_impact[!is.na(df_variable$economic_impact)])
 
-
+## area plots ------------------------------------
 f_fig_area("CO2",df_variable$CO2_sector[!is.na(df_variable$CO2_sector)],"Emissions|CO2")
 f_fig_area("CDR",df_variable$CDR[!is.na(df_variable$CDR)],"Carbon Removal")
 f_fig_area("Final_Energy_Sector",df_variable$final_energy_sector[!is.na(df_variable$final_energy_sector)],"Final Energy")
@@ -778,14 +888,16 @@ f_fig_area("Primary_Energy",df_variable$primary_energy[!is.na(df_variable$primar
 f_fig_area("Land_Cover",df_variable$land_cover[!is.na(df_variable$land_cover)],NA)
 f_fig_area("Agricultural_Production",df_variable$agricultural_production[!is.na(df_variable$agricultural_production)],"Agricultural Production")
 
+## bar plots ------------------------------------
+f_fig_bar1("CO2",df_variable$CO2_sector[!is.na(df_variable$CO2_sector)],"Emissions|CO2")
+f_fig_bar1("CDR",df_variable$CDR[!is.na(df_variable$CDR)],"Carbon Removal")
+f_fig_bar1("Final_Energy_Sector",df_variable$final_energy_sector[!is.na(df_variable$final_energy_sector)],"Final Energy")
+f_fig_bar1("Final_Energy_Source",df_variable$final_energy_source[!is.na(df_variable$final_energy_source)],"Final Energy")
+f_fig_bar1("Primary_Energy",df_variable$primary_energy[!is.na(df_variable$primary_energy)],"Primary Energy")
+f_fig_bar1("Land_Cover",df_variable$land_cover[!is.na(df_variable$land_cover)],NA)
+f_fig_bar1("Agricultural_Production",df_variable$agricultural_production[!is.na(df_variable$agricultural_production)],"Agricultural Production")
 
-f_fig_bar("CO2",df_variable$CO2_sector[!is.na(df_variable$CO2_sector)],"Emissions|CO2")
-f_fig_bar("CDR",df_variable$CDR[!is.na(df_variable$CDR)],"Carbon Removal")
-f_fig_bar("Final_Energy_Sector",df_variable$final_energy_sector[!is.na(df_variable$final_energy_sector)],"Final Energy")
-f_fig_bar("Final_Energy_Source",df_variable$final_energy_source[!is.na(df_variable$final_energy_source)],"Final Energy")
-f_fig_bar("Primary_Energy",df_variable$primary_energy[!is.na(df_variable$primary_energy)],"Primary Energy")
-f_fig_bar("Land_Cover",df_variable$land_cover[!is.na(df_variable$land_cover)],NA)
-f_fig_bar("Agricultural_Production",df_variable$agricultural_production[!is.na(df_variable$agricultural_production)],"Agricultural Production")
 
+f_fig_bar2(df=df_snap_cum_change,"Economic_impact_cumulative",df_variable$economic_impact_cumulative[!is.na(df_variable$economic_impact_cumulative)],"Cumulative economic impacts")
 
 

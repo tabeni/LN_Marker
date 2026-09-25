@@ -272,6 +272,112 @@ for (i in df_define$model1[!is.na(df_define$model1)]) {
                 filter(Model=="AIM"|Scenario_SSP=="SSP2_LN"))
 }
 
+#climate assessment, annual resolution, for the forcing figures------------------
+#The loop above puts the assessed warming on the same five-year grid as df_snap.
+#The forcing figures need the peak-warming year and a smooth composition, so the
+#same products are read again here at their native annual resolution.
+#The marker run of a model is the single scenario under climate-assessment/marker/.
+#The model's own folder holds every variant of that scenario name, so the scenario is
+#pinned explicitly and marker/ is used whenever it is there. AIM's own SSP1 VL is
+#carried as a third series, so that the LN-VL gap can be read within one model too.
+
+df_series <- data.frame(Series = c("SSP2_LN (AIM, marker)","SSP1_VL (REMIND, marker)","SSP1_VL (AIM)"),
+                        Marker = c(TRUE,TRUE,FALSE),
+                        Model = c("AIM 3.0","REMIND-MAgPIE 3.5-4.11","AIM 3.0"),
+                        Scenario = c("SSP2 - Low Overshoot_a","SSP1 - Very Low Emissions","SSP1 - Very Low Emissions"),
+                        stringsAsFactors = FALSE)
+#names(df_define$color_scenario) above does not survive the assignment back into the
+#data frame, so the scenario colours are looked up through an explicit named vector
+v_col_scenario <- setNames(df_define$color_scenario[!is.na(df_define$scenario1)],
+                           df_define$scenario1[!is.na(df_define$scenario1)])
+#the third series is a lighter tint of VL, to read as a variant of the same scenario
+v_col_series <- setNames(c(v_col_scenario["LN"],v_col_scenario["VL"],"#7fbde6"),
+                         df_series$Series)
+
+f_read_clim <- function(v_kind) {
+  bind_rows(lapply(seq_len(nrow(df_series)), function(i) {
+    v_file <- paste0("../data/climate-assessment/marker/",df_series$Model[i],"/",v_kind,"_",df_series$Model[i],".csv")
+    if (!df_series$Marker[i] | !file.exists(v_file)) {
+      v_file <- paste0("../data/climate-assessment/",df_series$Model[i],"/",v_kind,"_",df_series$Model[i],".csv")
+    }
+    read.csv(v_file, header=T, check.names=F)%>%
+      filter(quantile==0.5, scenario==df_series$Scenario[i])%>%
+      pivot_longer(cols=matches("^[0-9]{4}$"), names_to="Year", values_to="Value")%>%
+      mutate(Year=as.integer(Year), Series=df_series$Series[i])%>%
+      filter(Year>=2020, Year<=2100, !is.na(Value))%>%
+      select(Series,Variable=variable,Unit=unit,Year,Value)
+  }))%>%
+    mutate(Series=factor(Series,levels=df_series$Series))
+}
+
+df_gsat <- f_read_clim("assessed-warming-timeseries-quantiles")
+df_erf_raw <- f_read_clim("erf-timeseries-quantiles")
+
+#peak warming year of each series, read off the median assessed warming
+df_peak <- df_gsat%>%
+  group_by(Series)%>%
+  slice_max(Value, n=1, with_ties=FALSE)%>%
+  ungroup()%>%
+  select(Series,peak_year=Year,peak_gsat=Value)
+
+#The listed components add up to Anthropogenic except for a small remainder (land
+#albedo, contrails, stratospheric water vapour, ...). That remainder is carried
+#explicitly as "Other anthropogenic", so that the stack is exact.
+v_erf_comp <- c("Effective Radiative Forcing|CO2"                             = "CO2",
+                "Effective Radiative Forcing|CH4"                             = "CH4",
+                "Effective Radiative Forcing|N2O"                             = "N2O",
+                "Effective Radiative Forcing|F-Gases"                         = "F-gases",
+                "Effective Radiative Forcing|Montreal Protocol Halogen Gases" = "Montreal gases",
+                "Effective Radiative Forcing|Tropospheric Ozone"              = "Tropospheric ozone",
+                "Effective Radiative Forcing|Stratospheric Ozone"             = "Stratospheric ozone",
+                "Effective Radiative Forcing|Aerosols|Direct Effect"          = "Aerosols (direct)",
+                "Effective Radiative Forcing|Aerosols|Indirect Effect"        = "Aerosols (indirect)")
+v_erf_order <- c("CO2","CH4","N2O","F-gases","Montreal gases","Tropospheric ozone",
+                 "Stratospheric ozone","Aerosols (direct)","Aerosols (indirect)",
+                 "Other anthropogenic")
+v_col_erf <- setNames(c("#E41A1C","#FF7F00","#FDB462","#A65628","#F781BF","#FFED6F",
+                        "#CCEBC5","#377EB8","#80B1D3","#D9D9D9"), v_erf_order)
+
+df_erf <- df_erf_raw%>%
+  filter(Variable %in% names(v_erf_comp))%>%
+  mutate(Component=v_erf_comp[Variable])%>%
+  select(Series,Year,Component,Value)
+
+df_erf <- df_erf%>%
+  bind_rows(df_erf_raw%>%
+              filter(Variable=="Effective Radiative Forcing|Anthropogenic")%>%
+              select(Series,Year,anthro=Value)%>%
+              left_join(df_erf%>%
+                          group_by(Series,Year)%>%
+                          summarise(part=sum(Value),.groups="drop"),
+                        by=c("Series","Year"))%>%
+              mutate(Component="Other anthropogenic",Value=anthro-part)%>%
+              select(Series,Year,Component,Value))%>%
+  mutate(Component=factor(Component,levels=v_erf_order))
+
+df_erf_tot <- df_erf_raw%>%
+  filter(Variable=="Effective Radiative Forcing|Anthropogenic")%>%
+  select(Series,Year,Value)
+
+#composition at each series' own peak-warming year, and the LN - VL difference
+df_erf_peak <- df_erf%>%
+  inner_join(df_peak,by="Series")%>%
+  filter(Year==peak_year)
+
+v_lab_diff <- paste0("LN - ",df_series$Series[-1])
+df_erf_diff <- bind_rows(lapply(seq_along(v_lab_diff), function(i) {
+  df_erf_peak%>%
+    filter(Series==df_series$Series[1])%>%
+    select(Component,ln=Value)%>%
+    left_join(df_erf_peak%>%
+                filter(Series==df_series$Series[i+1])%>%
+                select(Component,vl=Value),by="Component")%>%
+    mutate(Series=v_lab_diff[i],Value=ln-vl)%>%
+    select(Component,Series,Value)
+}))
+#neutral tones, so that a difference is not mistaken for one of the three series
+v_col_diff <- setNames(c("#c87820","#d3a640"),v_lab_diff)
+
 #Other Data import--------------------------------------------------------
 
 df_AR6 <- read.csv("../data/AR6_Scenario_Database.csv", header=T)%>%
@@ -544,7 +650,7 @@ f_fig_line1 <- function(v_name, v_var) {
   print(p)
   dev.off()
 }
-f_fig_line2 <- function(v_name, v_var) {
+f_fig_line2 <- function(v_name, v_var, v_zero=TRUE) {
   df_fig1<-filter(df_snap,Variable %in% v_var, 
                   Model=="AIM", Region=="World",
                   Scenario_SSP %in% df_define$marker_scenario[!is.na(df_define$marker_scenario)])%>%
@@ -561,7 +667,7 @@ f_fig_line2 <- function(v_name, v_var) {
   df_fig4<-filter(df_AR6,Variable %in% v_var, Region=="World", Year=="2100")%>%
     mutate(Variable = factor(Variable,levels=v_var))
   p<-ggplot() +
-    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
+    {if (v_zero) geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)}+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
     geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
@@ -774,6 +880,69 @@ f_fig_bar2 <- function(v_name, v_area, v_point) {
   dev.off()
 }
 
+#forcing plot
+#These three read df_gsat/df_erf rather than df_snap, because the peak-warming year
+#and the composition around it are lost on the five-year grid.
+f_fig_forcing_line <- function(v_name) {
+  p<-ggplot() +
+    geom_line(data=df_gsat,aes(x=Year,y=Value,colour=Series),linewidth=1.1)+
+    geom_point(data=df_peak,aes(x=peak_year,y=peak_gsat,colour=Series),size=4,shape=18)+
+    geom_text(data=df_peak,aes(x=peak_year,y=peak_gsat,colour=Series,
+                               label=paste0(sprintf("%.2f",peak_gsat)," K (",peak_year,")")),
+              hjust=-0.12,vjust=-0.6,size=6,show.legend=FALSE)+
+    scale_colour_manual(values=v_col_series)+
+    scale_x_continuous(breaks=seq(2020,2100,10),expand=expansion(mult=c(0.02,0.12)))+
+    ylab("Global surface air temperature change (K)") + xlab("Year") +
+    labs(colour="Scenario",title="Median of the climate assessment") + theme1
+  png(paste(v_path["fig_main"],"/",v_name,"_peak_warming_line.png",sep=""), width = 3400, height = 2000,res = 300)
+  print(p)
+  dev.off()
+}
+#geom_col with width=1 on annual data reads like a stacked area and, unlike geom_area,
+#stacks the negative aerosol terms downwards correctly.
+f_fig_forcing_area <- function(v_name) {
+  p<-ggplot() +
+    geom_col(data=df_erf,aes(x=Year,y=Value,fill=Component),width=1,alpha=0.9)+
+    geom_line(data=df_erf_tot,aes(x=Year,y=Value),colour="black",linewidth=0.9)+
+    geom_vline(data=df_peak,aes(xintercept=peak_year),linetype="longdash",colour="black")+
+    geom_text(data=df_peak,aes(x=peak_year,y=-Inf,label=paste0("peak ",peak_year)),
+              angle=90,hjust=-0.15,vjust=-0.5,size=5)+
+    geom_hline(yintercept=0,linewidth=0.3)+
+    facet_wrap(~Series,nrow=1)+
+    scale_fill_manual(values=v_col_erf)+
+    scale_x_continuous(breaks=seq(2020,2100,20))+
+    ylab(expression(paste("Effective radiative forcing (W ",m^-2,")"))) + xlab("Year") +
+    labs(fill="Component",title="Black line: total anthropogenic ERF") + theme1
+  png(paste(v_path["fig_main"],"/",v_name,"_composition_area.png",sep=""), width = 5000, height = 2200,res = 300)
+  print(p)
+  dev.off()
+}
+f_fig_forcing_bar <- function(v_name) {
+  v_panel <- c("ERF at each scenario's peak-warming year","Difference (LN - VL) at the peak-warming year")
+  df_fig1<-bind_rows(df_erf_peak%>%select(Component,Series,Value)%>%mutate(Panel=v_panel[1]),
+                     df_erf_diff%>%mutate(Panel=v_panel[2]))%>%
+    mutate(Panel=factor(Panel,levels=v_panel),
+           Series=factor(Series,levels=c(df_series$Series,v_lab_diff)))
+  p<-ggplot(df_fig1,aes(x=Component,y=Value,fill=Series)) +
+    geom_col(position=position_dodge(width=0.8,preserve="single"),width=0.7,alpha=0.9)+
+    geom_hline(yintercept=0,linewidth=0.3)+
+    facet_wrap(~Panel,nrow=2,scales="free_y")+
+    scale_fill_manual(values=c(v_col_series,v_col_diff))+
+    ylab(expression(paste("Effective radiative forcing (W ",m^-2,")"))) + xlab("") +
+    labs(fill="Scenario") + theme1
+  png(paste(v_path["fig_main"],"/",v_name,"_peak_composition_bar.png",sep=""), width = 4600, height = 3400,res = 300)
+  print(p)
+  dev.off()
+}
+f_tab_forcing <- function(v_name) {
+  df_peak%>%
+    write.csv(paste(v_path["tab_main"],"/",v_name,"_peak_warming_year.csv",sep=""), row.names = FALSE )
+  bind_rows(df_erf_peak%>%select(Series,Component,Value),
+            df_erf_diff%>%select(Series,Component,Value))%>%
+    pivot_wider(names_from = Component, values_from = Value)%>%
+    write.csv(paste(v_path["tab_main"],"/",v_name,"_peak_composition.csv",sep=""), row.names = FALSE )
+}
+
 f_tab <- function(v_name, v_var) {
   df_snap%>%
     filter(Variable %in% v_var, Region=="World")%>%
@@ -791,9 +960,13 @@ f_fig_line1("Air_Pollutant_Ratio",df_variable$air_pollutant_energy_ratio[!is.na(
 f_fig_line2("Primary_Energy","Primary Energy")
 f_fig_line2("Final_Energy","Final Energy")
 f_fig_line2("Agricultural_Production","Agricultural Production")
+f_fig_line2("Food_Agriculture",c(df_variable$food[!is.na(df_variable$food)],"Agricultural Production"), v_zero=FALSE)
 f_fig_line3("Food_Availability",df_variable$food[!is.na(df_variable$food)])
 f_fig_line4("Economic_indicator",df_variable$economic_impact[!is.na(df_variable$economic_impact)])
 f_fig_line6("CDR_CCS",df_variable$CDR_CCS[!is.na(df_variable$CDR_CCS)], v_nrow=2)
+f_fig_forcing_line("Forcing")
+f_fig_forcing_area("Forcing")
+f_fig_forcing_bar("Forcing")
 
 f_fig_area("CO2",df_variable$CO2_sector[!is.na(df_variable$CO2_sector)],"Emissions|CO2")
 f_fig_line5("SDG",df_variable$sdg[!is.na(df_variable$sdg)])
@@ -817,5 +990,7 @@ f_fig_bar("Agricultural_Production",df_variable$agricultural_production[!is.na(d
 f_tab("GHG",df_variable$GHG[!is.na(df_variable$GHG)])
 f_tab("CO2",df_variable$CO2_sector[!is.na(df_variable$CO2_sector)])
 f_tab("SDG",df_variable$sdg[!is.na(df_variable$sdg)])
+f_tab("Food_Agriculture",c(df_variable$food[!is.na(df_variable$food)],"Agricultural Production"))
+f_tab_forcing("Forcing")
 
 

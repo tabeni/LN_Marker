@@ -19,7 +19,7 @@ v_project_dir <- normalizePath(file.path(v_script_dir, ".."), mustWork = TRUE)
 v_define_dir <- file.path(v_project_dir, "define")
 # Default to the latest data release. Environment variables can still select
 # an older release and output directory without editing this script.
-v_download <- Sys.getenv("LN_MARKER_DOWNLOAD", unset = "20260915")
+v_download <- Sys.getenv("LN_MARKER_DOWNLOAD", unset = Sys.getenv("LN_DATA_VERSION", unset = "20260915"))
 v_output_dir <- file.path(
   v_project_dir,
   Sys.getenv(
@@ -99,6 +99,9 @@ df_define <- read_csv(file.path(v_define_dir, "define.csv"), locale = locale(enc
   mutate(year1 = as.character(year1))
 names(df_define$color_scenario) <- df_define$scenario1
 names(df_define$color_model) <- df_define$model2
+# Common paper style and explicit named palettes (colours are matched by name).
+source(file.path(v_script_dir, "style_common.R"))
+v_col_scenario <- f_pal_scenario(df_define)
 names(df_define$color_ar6) <- df_define$ar6_database
 
 df_variable <- read_csv(file.path(v_define_dir, "variable.csv"), locale = locale(encoding = "shift-jis"), show_col_types = FALSE)
@@ -689,12 +692,12 @@ f_fig_line1 <- function(v_name, v_var) {
     geom_point(data = df_dummy, aes(x = Year, y = Value), alpha = 0) +
     geom_line(data = df_fig1, aes(x = Year, y = Value, group = Scenario_SSP, color = Scenario), linewidth = 0.8, alpha = 0.9) +
     geom_line(data = df_fig2, aes(x = Year, y = Value, group = interaction(Scenario_SSP, Model), color = Scenario), linewidth = 0.2, alpha = 0.6, linetype = "solid") +
-    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = df_define$color_scenario["LN"]) +
+    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = v_col_scenario["LN"]) +
     geom_linerange(data = df_fig4, aes(x = Category, ymin = lo5, ymax = up5, group = Category), color = "grey", alpha = 0.4, linewidth = 5, show.legend = FALSE) +
     geom_linerange(data = df_fig4, aes(x = Category, ymin = lo25, ymax = up25, group = Category), color = "grey", alpha = 0.5, linewidth = 5, show.legend = FALSE) +
     facet_wrap(Variable ~ Unit, scales = "free", nrow = 2) +
     scale_x_discrete(breaks = c(df_define$year1[!is.na(df_define$year1)], df_define$ar6_database[!is.na(df_define$ar6_database)])) +
-    scale_colour_manual(values = c(df_define$color_scenario)) +
+    scale_colour_manual(values = v_col_scenario) +
     ylab("") +
     xlab("Year") +
     theme1 +
@@ -731,12 +734,12 @@ f_fig_line2 <- function(v_name, v_var) {
     geom_point(data = df_dummy, aes(x = Year, y = Value), alpha = 0) +
     geom_line(data = df_fig1, aes(x = Year, y = Value, group = Scenario_SSP, color = Scenario), linewidth = 0.8, alpha = 0.9) +
     geom_line(data = df_fig2, aes(x = Year, y = Value, group = interaction(Scenario_SSP, Model), color = Scenario), linewidth = 0.2, alpha = 0.6, linetype = "solid") +
-    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = df_define$color_scenario["LN"]) +
+    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = v_col_scenario["LN"]) +
     geom_linerange(data = df_fig4, aes(x = Category, ymin = lo5, ymax = up5, group = Category), color = "grey", alpha = 0.4, linewidth = 5, show.legend = FALSE) +
     geom_linerange(data = df_fig4, aes(x = Category, ymin = lo25, ymax = up25, group = Category), color = "grey", alpha = 0.5, linewidth = 5, show.legend = FALSE) +
     facet_wrap(Variable ~ Unit, scales = "free", nrow = 1) +
     scale_x_discrete(breaks = c(df_define$year1[!is.na(df_define$year1)], df_define$ar6_database[!is.na(df_define$ar6_database)])) +
-    scale_colour_manual(values = c(df_define$color_scenario)) +
+    scale_colour_manual(values = v_col_scenario) +
     ylab("") +
     xlab("Year") +
     theme1 +
@@ -766,14 +769,14 @@ f_fig_line3 <- function(v_name, v_var) {
     geom_ribbon(
       data = df_fig3,
       aes(x = Year, ymin = min, ymax = max, group = Scenario),
-      alpha = 0.1, fill = df_define$color_scenario["LN"],
+      alpha = 0.1, fill = v_col_scenario["LN"],
       show.legend = FALSE
     ) +
     geom_line(data = df_fig1, aes(x = Year, y = Value, group = Scenario_SSP, color = Scenario), linewidth = 0.8, alpha = 0.9) +
     facet_wrap(~Region, scales = "fixed", nrow = 1) +
     coord_cartesian(ylim = c(2000, NA)) +
     scale_x_discrete(breaks = c(df_define$year1[!is.na(df_define$year1)], df_define$ar6_database[!is.na(df_define$ar6_database)])) +
-    scale_colour_manual(values = c(df_define$color_scenario)) +
+    scale_colour_manual(values = v_col_scenario) +
     ylab("") +
     xlab("Year") +
     labs(title = v_var) +
@@ -812,10 +815,10 @@ f_fig_line4 <- function(v_name, v_var) {
     geom_point(data = df_dummy, aes(x = Year, y = Value), alpha = 0) +
     geom_line(data = df_fig1, aes(x = Year, y = Value, group = Scenario_SSP, color = Scenario), linewidth = 0.8, alpha = 0.9) +
     geom_line(data = df_fig2, aes(x = Year, y = Value, group = interaction(Scenario_SSP, Model), color = Scenario), linewidth = 0.2, alpha = 0.6, linetype = "solid") +
-    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = df_define$color_scenario["LN"]) +
+    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = v_col_scenario["LN"]) +
     facet_wrap(Variable ~ Unit, scales = "free", nrow = 1) +
     scale_x_discrete(breaks = c(df_define$year1[!is.na(df_define$year1)], df_define$ar6_database[!is.na(df_define$ar6_database)])) +
-    scale_colour_manual(values = c(df_define$color_scenario)) +
+    scale_colour_manual(values = v_col_scenario) +
     ylab("") +
     xlab("Year") +
     theme1 +
@@ -850,10 +853,10 @@ f_fig_line5 <- function(v_name, v_var) {
   p <- ggplot() +
     geom_line(data = df_fig1, aes(x = Year, y = Value, group = Scenario_SSP, color = Scenario), linewidth = 0.8, alpha = 0.9) +
     geom_line(data = df_fig2, aes(x = Year, y = Value, group = interaction(Scenario_SSP, Model), color = Scenario), linewidth = 0.2, alpha = 0.6, linetype = "solid") +
-    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = df_define$color_scenario["LN"]) +
+    geom_ribbon(data = df_fig3, aes(x = Year, ymin = min, ymax = max, group = Scenario, ), alpha = 0.1, fill = v_col_scenario["LN"]) +
     facet_wrap(Variable ~ Unit, scales = "free", nrow = 3) +
     scale_x_discrete(breaks = c(df_define$year1[!is.na(df_define$year1)], df_define$ar6_database[!is.na(df_define$ar6_database)])) +
-    scale_colour_manual(values = c(df_define$color_scenario)) +
+    scale_colour_manual(values = v_col_scenario) +
     ylab("") +
     xlab("Year") +
     theme1 +
@@ -938,6 +941,7 @@ f_fig_area <- function(v_name, v_area, v_line) {
   png(paste(v_path["fig_main"], "/", v_name, "area_.png", sep = ""), width = length(df_define$marker_scenario[!is.na(df_define$marker_scenario)]) * 800, height = 2400 + length(v_area) * 20, res = 300)
   print(p)
   dev.off()
+  invisible(p)
 }
 # Bar plots --------------------------------------------------------------------
 f_fig_bar <- function(v_name, v_area, v_point) {
@@ -1063,6 +1067,14 @@ f_fig_food_source_area <- function() {
   dev.off()
 }
 
+# Land-type colours, in the order of v_land_labels below. Kept at top level so
+# that the land-use change areas in the paper figure use the same colours.
+v_land_type_colors <- c(
+  "#66BD63", "#5B9BD5", "#E83E3E", "#FF8C2A",
+  "#B8DE69", "#B66D44", "#228833", "#8DB8D3",
+  "#FDBF73", "#8DD3C7"
+)
+
 # SSP2-LN land-cover comparison at 2050 and 2100. Forest subcategories are
 # replaced by the common parent category because their reporting differs by model.
 f_fig_land_cover_ln_comparison <- function() {
@@ -1087,11 +1099,7 @@ f_fig_land_cover_ln_comparison <- function() {
     "Other Crops", "Sugar Crops", "Forest", "Other / unspecified land",
     "Other Natural Land", "Pasture"
   )
-  v_land_colors <- setNames(c(
-    "#66BD63", "#5B9BD5", "#E83E3E", "#FF8C2A",
-    "#B8DE69", "#B66D44", "#228833", "#8DB8D3",
-    "#FDBF73", "#8DD3C7"
-  ), v_land_labels)
+  v_land_colors <- setNames(v_land_type_colors, v_land_labels)
   v_variable_labels <- setNames(v_land_labels, v_land_absolute)
   v_model_levels <- c(
     "AIM", "COFFEE", "GCAM", "IMAGE",
@@ -1186,6 +1194,7 @@ f_fig_land_cover_ln_comparison <- function() {
     df_coverage,
     file.path(v_path["tab_main"], "Land_Cover_LN_category_coverage.csv")
   )
+  invisible(p_absolute)
 }
 
 # AIM spatial land-use maps for 2050 and 2100 ----------------------------------
@@ -1563,7 +1572,7 @@ f_fig_area("CDR", df_variable$CDR[!is.na(df_variable$CDR)], "Carbon Removal")
 f_fig_area("Final_Energy_Sector", df_variable$final_energy_sector[!is.na(df_variable$final_energy_sector)], "Final Energy")
 f_fig_area("Final_Energy_Source", df_variable$final_energy_source[!is.na(df_variable$final_energy_source)], "Final Energy")
 f_fig_area("Primary_Energy", df_variable$primary_energy[!is.na(df_variable$primary_energy)], "Primary Energy")
-f_fig_area("Land_Cover", df_variable$land_cover[!is.na(df_variable$land_cover)], NA)
+p_land_change <- f_fig_area("Land_Cover", df_variable$land_cover[!is.na(df_variable$land_cover)], NA)
 f_fig_area("Agricultural_Production", v_agricultural_production, NA)
 
 
@@ -1575,5 +1584,62 @@ f_fig_bar("Primary_Energy", df_variable$primary_energy[!is.na(df_variable$primar
 f_fig_bar("Land_Cover", df_variable$land_cover[!is.na(df_variable$land_cover)], NA)
 f_fig_bar("Agricultural_Production", v_agricultural_production, "Agricultural Production")
 f_fig_food_source_area()
-f_fig_land_cover_ln_comparison()
+p_land_cover_ln <- f_fig_land_cover_ln_comparison()
 f_fig_aim_land_grid()
+
+# Paper figure 5 (ERL revision) ------------------------------------------------
+# Land-use change, LN land cover by model, and food and agricultural production,
+# composed into one file with tagged panels. The plotted data are those of
+# f_fig_area("Land_Cover"), f_fig_land_cover_ln_comparison() and the
+# Food_Agriculture line figure of main.R; only the presentation is set here.
+
+v_fig_paper <- f_paper_dir(file.path(v_project_dir, "output", "figure", "paper"))
+v_marker <- df_define$marker_scenario[!is.na(df_define$marker_scenario)]
+v_year1 <- df_define$year1[!is.na(df_define$year1)]
+f_lab_model <- function(x) {
+  x <- str_replace(x, "MESSAGEix-GLOBIOM", "MESSAGEix")
+  str_replace(x, "REMIND-MAgPIE", "REMIND")
+}
+
+# (a) land-use change from 2020; land types coloured as in (b)
+v_land_levels <- levels(p_land_change$layers[[1]]$data$Variable)
+stopifnot(length(v_land_levels) == length(v_land_type_colors))
+p_fig5_a <- p_land_change +
+  f_zero_line() +
+  scale_fill_manual(
+    values = setNames(v_land_type_colors, v_land_levels),
+    labels = setNames(f_fill_labels("Land_Cover", v_land_levels), v_land_levels), name = "Land type"
+  ) +
+  scale_x_discrete(breaks = v_year_breaks) +
+  labs(x = NULL, y = "Land-use change from 2020 (million ha)") +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+  theme_paper() +
+  theme_x90() +
+  theme(legend.position = "bottom", legend.justification = "left")
+
+# (b) land cover of the SSP2-LN runs by model
+p_fig5_b <- p_land_cover_ln +
+  scale_x_discrete(labels = f_lab_model) +
+  guides(fill = guide_legend(ncol = 1)) +
+  theme_paper() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+    panel.grid.major.x = element_blank()
+  )
+
+# (c)-(e) food availability and agricultural production
+v_fig5_food <- c(df_variable$food[!is.na(df_variable$food)], "Agricultural Production")
+v_fig5_scen <- f_scen_present(df_snap, v_fig5_food, v_marker, names(v_col_scenario))
+p_fig5_food <- lapply(seq_along(v_fig5_food), function(i) {
+  f_panel_line(df_snap, v_fig5_food[i],
+    c("Food availability per capita\n(kcal/cap/day)", "Livestock food per capita\n(kcal/cap/day)",
+      "Agricultural production\n(million t DM/yr)")[i],
+    v_col_scenario, v_fig5_scen, v_marker, v_year1,
+    zero_line = FALSE
+  ) + theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+})
+
+p_fig5 <- p_fig5_a / p_fig5_b /
+  (wrap_plots(p_fig5_food, ncol = 3) + plot_layout(guides = "collect")) +
+  plot_layout(heights = c(1.15, 1, 0.85)) + f_tags()
+f_save_paper(p_fig5, "Figure5", 23, v_fig_paper)

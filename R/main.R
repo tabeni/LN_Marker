@@ -11,7 +11,8 @@ library(scales)
 #library(gridExtra)
 
 #Setting------------------------------------------------------------------------
-v_download <- "20260915"
+#data release; LN_DATA_VERSION selects another one without editing the script
+v_download <- Sys.getenv("LN_DATA_VERSION", "20260915")
 
 theme1<-theme(
   panel.background = element_rect(fill = "transparent", colour = "black"),
@@ -51,6 +52,10 @@ df_define  <- read_csv("../define/define.csv", locale = locale(encoding = "shift
 names(df_define$color_scenario)<-df_define$scenario1
 names(df_define$color_model)<-df_define$model2
 names(df_define$color_ar6)<-df_define$ar6_database
+#common paper style and explicit named palettes (colours are matched by name)
+source("style_common.R")
+v_col_scenario <- f_pal_scenario(df_define)
+v_col_model <- f_pal_model(df_define)
 
 df_variable <- read_csv("../define/variable.csv", locale = locale(encoding = "shift-jis"),show_col_types = FALSE)
 
@@ -286,10 +291,7 @@ df_series <- data.frame(Series = c("SSP2_LN (AIM, marker)","SSP1_VL (REMIND, mar
                         Model = c("AIM 3.0","REMIND-MAgPIE 3.5-4.11","AIM 3.0"),
                         Scenario = c("SSP2 - Low Overshoot_a","SSP1 - Very Low Emissions","SSP1 - Very Low Emissions"),
                         stringsAsFactors = FALSE)
-#names(df_define$color_scenario) above does not survive the assignment back into the
-#data frame, so the scenario colours are looked up through an explicit named vector
-v_col_scenario <- setNames(df_define$color_scenario[!is.na(df_define$scenario1)],
-                           df_define$scenario1[!is.na(df_define$scenario1)])
+#the scenario colours come from the named vector v_col_scenario defined above
 #the third series is a lighter tint of VL, to read as a variant of the same scenario
 v_col_series <- setNames(c(v_col_scenario["LN"],v_col_scenario["VL"],"#7fbde6"),
                          df_series$Series)
@@ -639,12 +641,12 @@ f_fig_line1 <- function(v_name, v_var) {
     geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend = FALSE) +  
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend = FALSE) +  
     facet_wrap(Variable~Unit,scales = "free",nrow=2) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)/2*1800+450, height = 3200,res = 300)
   print(p)
@@ -670,12 +672,12 @@ f_fig_line2 <- function(v_name, v_var, v_zero=TRUE) {
     {if (v_zero) geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)}+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend = FALSE) +  
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend = FALSE) +  
     facet_wrap(Variable~Unit,scales = "free",nrow=1) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)*1800+450, height = 1800,res = 300)
   print(p)
@@ -701,12 +703,12 @@ f_fig_line3 <- function(v_name, v_var) {
     geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend = FALSE) +  
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend = FALSE) +  
     facet_wrap(Variable~Region,scales = "free",nrow=3) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 + theme(legend.direction = "horizontal", legend.position ="bottom",  legend.title = element_text(size = 25), legend.text = element_text(size = 25),)
   png(paste(v_path["fig_main"],"/",v_name,"_line_region5.png",sep=""), width = 6000, height = 6000,res = 300)
   print(p)
@@ -732,12 +734,12 @@ f_fig_line4 <- function(v_name, v_var) {
     geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category,color=Category),alpha=0.4,linewidth=5) +  
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category,color=Category),alpha=0.5,linewidth=5) +  
     facet_wrap(Variable~Unit,scales = "free",nrow=1) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)*1800+450, height = 1800,res = 300)
   print(p)
@@ -762,12 +764,12 @@ f_fig_line5 <- function(v_name, v_var) {
 #    geom_point(data = df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category,color=Category),alpha=0.4,linewidth=5) +  
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category,color=Category),alpha=0.5,linewidth=5) +  
     facet_wrap(Variable~Unit,scales = "free",nrow=2) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width = length(v_var)/3*3400+800, height = 4600,res = 300)
   print(p)
@@ -783,7 +785,7 @@ f_fig_line6 <- function(v_name, v_var, v_nrow=1) {
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Model,color=Model),linewidth=0.8,alpha=0.9)+
     facet_wrap(Variable~Unit,scales = "free",nrow=v_nrow) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)]))+
-    scale_colour_manual(values=c(df_define$color_model)) +
+    scale_colour_manual(values=v_col_model) +
     ylab("") + xlab("Year") + labs(color="Model (LN scenario)") + theme1 +
     theme(legend.title = element_text(size = 16), legend.text = element_text(size = 14))
   v_ncol <- ceiling(length(v_var)/v_nrow)
@@ -992,5 +994,135 @@ f_tab("CO2",df_variable$CO2_sector[!is.na(df_variable$CO2_sector)])
 f_tab("SDG",df_variable$sdg[!is.na(df_variable$sdg)])
 f_tab("Food_Agriculture",c(df_variable$food[!is.na(df_variable$food)],"Agricultural Production"))
 f_tab_forcing("Forcing")
+
+#Paper figures (ERL revision)---------------------------------------------------
+#Figures 2, 3, 4 and 8 of the paper, each composed into one file with tagged
+#panels. Same data selection as the functions above; only the presentation
+#(common palette, theme, panel tags, vector output) is set here.
+
+v_fig_paper <- f_paper_dir("../output/figure/paper")
+v_marker <- df_define$marker_scenario[!is.na(df_define$marker_scenario)]
+v_scen_all <- names(v_col_scenario)
+v_year1 <- df_define$year1[!is.na(df_define$year1)]
+v_ar6_cat <- df_define$ar6_database[!is.na(df_define$ar6_database)]
+v_scen_model <- df_define$scenario_model[!is.na(df_define$scenario_model)]
+#shorter model names on the bar axes
+f_lab_bar <- function(x) {
+  x <- str_replace(x, "MESSAGEix-GLOBIOM", "MESSAGEix")
+  x <- str_replace(x, "REMIND-MAgPIE", "REMIND")
+  str_replace(x, "_", " ")
+}
+#categorical fills taken from define.csv in their listed order and assigned to the
+#categories that AIM reports, as in the submitted figures; named by variable
+f_pal_fill <- function(v_area) {
+  v_have <- v_area[v_area %in% df_snap$Variable[df_snap$Model == "AIM" & df_snap$Region == "World"]]
+  setNames(df_define$color_palette[seq_along(v_have)], v_have)
+}
+#line panels in three columns get the legend below, to leave room for the panels
+f_legend_bottom <- function() theme(legend.position = "bottom", legend.box = "horizontal")
+v_rel2020 <- "Relative to 2020 (2020 = 1)"
+
+f_paper_lines <- function(v_vars, v_titles, use_AR6 = TRUE, use_dummy = TRUE,
+                          zero_line = TRUE, v_ylabs = NULL) {
+  v_scen <- f_scen_present(df_snap, v_vars, v_marker, v_scen_all)
+  lapply(seq_along(v_vars), function(i) {
+    f_panel_line(df_snap, v_vars[i], v_titles[i], v_col_scenario, v_scen, v_marker, v_year1,
+                 df_AR6 = if (use_AR6) df_AR6 else NULL,
+                 df_dummy = if (use_dummy) df_dummy else NULL,
+                 zero_line = zero_line,
+                 v_ylab = if (is.null(v_ylabs)) NULL else v_ylabs[i],
+                 v_ar6_cat = v_ar6_cat)
+  })
+}
+
+#Figure 2: GHG emissions and warming; CO2 by sector
+v_fig2_var <- df_variable$GHG[!is.na(df_variable$GHG)]
+p_fig2_line <- f_paper_lines(v_fig2_var,
+                             c("CO2 emissions","CH4 emissions","N2O emissions",
+                               "Kyoto GHG emissions","Cumulative CO2 emissions",
+                               "Warming (GSAT, median)"))
+v_fig2_area <- df_variable$CO2_sector2[!is.na(df_variable$CO2_sector2)]
+v_fig2_lab <- c("Emissions|CO2|Other Capture and Removal"                = "Other capture and removal",
+                "Emissions|CO2|Energy|Supply"                            = "Energy supply",
+                "Emissions|CO2|Energy|Demand|Transportation"             = "Transportation",
+                "Emissions|CO2|Energy|Demand|Residential and Commercial" = "Residential and commercial",
+                "Emissions|CO2|Energy|Demand|Industry"                   = "Industry (energy)",
+                "Emissions|CO2|Industrial Processes"                     = "Industrial processes",
+                "Emissions|CO2|Energy|Demand|AFOFI"                      = "AFOFI (energy)",
+                "Emissions|CO2|AFOLU"                                    = "AFOLU")
+p_fig2_area <- f_panel_area(df_snap, v_fig2_area, "Emissions|CO2", "Net CO2 emissions", v_marker,
+                            f_pal_fill(v_fig2_area), v_fig2_lab[v_fig2_area], "CO2 by source and sink",
+                            "Gt CO2/yr") +
+  guides(fill = guide_legend(order = 1, nrow = 2, byrow = TRUE))
+p_fig2 <- (wrap_plots(p_fig2_line, ncol = 3) + plot_layout(guides = "collect") & f_legend_bottom()) /
+  p_fig2_area + plot_layout(heights = c(2, 1)) + f_tags()
+f_save_paper(p_fig2, "Figure2", 22, v_fig_paper)
+
+#Figure 3: CDR and CCS; CDR by method
+v_fig3_var <- df_variable$CDR_CCS[!is.na(df_variable$CDR_CCS)]
+p_fig3_line <- f_paper_lines(v_fig3_var,
+                             c("Carbon dioxide removal","Cumulative carbon dioxide removal",
+                               "Geological CO2 storage","Cumulative geological CO2 storage"))
+v_fig3_area <- df_variable$CDR[!is.na(df_variable$CDR)]
+p_fig3_area <- f_panel_area(df_snap, v_fig3_area, "Carbon Removal", "Total CDR", v_marker,
+                            f_pal_fill(v_fig3_area),
+                            str_replace_all(str_remove(v_fig3_area, "^Carbon Removal\\|"), "\\|", ": "),
+                            "CDR by method", "Gt CO2/yr") +
+  guides(fill = guide_legend(order = 1, ncol = 3))
+p_fig3 <- (wrap_plots(p_fig3_line, ncol = 2) + plot_layout(guides = "collect")) /
+  p_fig3_area + plot_layout(heights = c(2, 1)) + f_tags()
+f_save_paper(p_fig3, "Figure3", 20, v_fig_paper)
+
+#Figure 4: primary and final energy; primary energy by source; final energy by sector
+p_fig4_line <- f_paper_lines(c("Primary Energy","Final Energy"),
+                             c("Total primary energy supply","Total final energy consumption"))
+v_fig4_pe <- df_variable$primary_energy[!is.na(df_variable$primary_energy)]
+#fossil sources share grey-brown hues (darker without CCS, lighter with CCS);
+#non-fossil sources use clearly different hues
+v_fig4_pe_col <- c("Primary Energy|Geothermal"      = "#D6604D",
+                   "Primary Energy|Hydro"           = "#2C5A9E",
+                   "Primary Energy|Solar"           = "#F6C141",
+                   "Primary Energy|Wind"            = "#6BAED6",
+                   "Primary Energy|Biomass|w/ CCS"  = "#1B7837",
+                   "Primary Energy|Biomass|w/o CCS" = "#8CC66B",
+                   "Primary Energy|Nuclear"         = "#A270B8",
+                   "Primary Energy|Gas|w/ CCS"      = "#E3D3B0",
+                   "Primary Energy|Gas|w/o CCS"     = "#C2A46E",
+                   "Primary Energy|Oil|w/ CCS"      = "#C49A7E",
+                   "Primary Energy|Oil|w/o CCS"     = "#8C5A3C",
+                   "Primary Energy|Coal|w/ CCS"     = "#A8A8A8",
+                   "Primary Energy|Coal|w/o CCS"    = "#4A4A4A",
+                   "Primary Energy|Other"           = "#F2DCE6")
+v_fig4_pe_lab <- str_replace_all(str_remove(v_fig4_pe, "^Primary Energy\\|"), "\\|", " ")
+v_fig4_pe_lab[str_detect(v_fig4_pe, "Coal|Oil|Gas")] <- paste0(v_fig4_pe_lab[str_detect(v_fig4_pe, "Coal|Oil|Gas")], " (fossil)")
+p_fig4_pe <- f_panel_bar(df_snap, v_fig4_pe, "Primary Energy", v_marker, v_scen_model,
+                         v_fig4_pe_col[v_fig4_pe], v_fig4_pe_lab, "Primary energy source", "EJ/yr") +
+  scale_x_discrete(labels = f_lab_bar)
+v_fig4_fe <- df_variable$final_energy_sector[!is.na(df_variable$final_energy_sector)]
+p_fig4_fe <- f_panel_bar(df_snap, v_fig4_fe, "Final Energy", v_marker, v_scen_model,
+                         f_pal_fill(v_fig4_fe), str_remove(v_fig4_fe, "^Final Energy\\|"),
+                         "Final energy sector", "EJ/yr") +
+  scale_x_discrete(labels = f_lab_bar)
+p_fig4 <- (wrap_plots(p_fig4_line, ncol = 2) + plot_layout(guides = "collect")) /
+  p_fig4_pe / p_fig4_fe + plot_layout(heights = c(1, 1.05, 1.05)) + f_tags()
+f_save_paper(p_fig4, "Figure4", 22, v_fig_paper)
+
+#Figure 8: sustainability indicators
+v_fig8_var <- df_variable$sdg[!is.na(df_variable$sdg)]
+p_fig8_line <- f_paper_lines(v_fig8_var,
+                             c("Biodiversity Intactness Index","Food price index",
+                               "Population at risk of hunger","Nitrogen fertilizer use",
+                               "Final energy, carbon management","Electricity price"),
+                             use_AR6 = FALSE, use_dummy = FALSE, zero_line = FALSE,
+                             v_ylabs = c(v_rel2020, v_rel2020, v_rel2020, v_rel2020, "EJ/yr", v_rel2020))
+#(f) electricity price without WITCH: its reported LN electricity price is
+#effectively zero (~1e-8 USD/GJ), so its 2020-indexed series is numerical noise
+#that would drag the multi-model range below zero
+p_fig8_line[[6]] <- f_panel_line(df_snap, v_fig8_var[6], "Electricity price", v_col_scenario,
+                                 f_scen_present(df_snap, v_fig8_var, v_marker, v_scen_all),
+                                 v_marker, v_year1, zero_line = FALSE, v_ylab = v_rel2020,
+                                 v_drop_model = "WITCH")
+p_fig8 <- wrap_plots(p_fig8_line, ncol = 3) + plot_layout(guides = "collect") + f_tags() & f_legend_bottom()
+f_save_paper(p_fig8, "Figure8", 13, v_fig_paper)
 
 

@@ -11,7 +11,8 @@ library(scales)
 #library(gridExtra)
 
 #Setting------------------------------------------------------------------------
-v_download <- "20260803"
+#data release; LN_DATA_VERSION selects another one without editing the script
+v_download <- Sys.getenv("LN_DATA_VERSION", "20260803")
 
 theme1<-theme(
   panel.background=element_rect(fill="transparent", colour="black"),
@@ -46,13 +47,19 @@ v_path <- c(fig="../output/figure",
 
 #define import-----------------------------------------------------------------
 
-df_define  <- read_csv("../define/define.csv", locale=locale(encoding="shift-jis"),show_col_types=FALSE)%>%
+#the macroeconomic analysis uses its own definition files: define_z.csv adds the
+#^Consumption filter and variable_z.csv holds the consumption and cumulative
+#economic-impact variables used below
+df_define  <- read_csv("../define/define_z.csv", locale=locale(encoding="shift-jis"),show_col_types=FALSE)%>%
   mutate(year1=as.character(year1))
 names(df_define$color_scenario)<-df_define$scenario1
 names(df_define$color_model)<-df_define$model2
 names(df_define$color_ar6)<-df_define$ar6_database
+#common paper style and explicit named palettes (colours are matched by name)
+source("style_common.R")
+v_col_scenario <- f_pal_scenario(df_define)
 
-df_variable <- read_csv("../define/variable.csv", locale=locale(encoding="shift-jis"),show_col_types=FALSE)
+df_variable <- read_csv("../define/variable_z.csv", locale=locale(encoding="shift-jis"),show_col_types=FALSE)
 
 #ScenarioMIP Data import--------------------------------------------------------
 
@@ -635,12 +642,12 @@ f_fig_line1 <- function(df=df_snap, v_name, v_var) {
     geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend=FALSE) +  
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend=FALSE) +  
     facet_wrap(Variable~Unit,scales="free",nrow=2) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)/2*1800+450, height=3200,res=300)
   print(p)
@@ -661,12 +668,12 @@ f_fig_line2 <- function(df=df_snap, v_name, v_var) {
     geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend=FALSE) +  
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend=FALSE) +  
     facet_wrap(Variable~Unit,scales="free",nrow=1) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)*1800+450, height=1800,res=300)
   print(p)
@@ -693,12 +700,12 @@ f_fig_line3 <- function(df=df_snap, v_name, v_var) {
     geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category),color="grey",alpha=0.4,linewidth=5,show.legend=FALSE) +  
     geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category),color="grey",alpha=0.5,linewidth=5,show.legend=FALSE) +  
     facet_wrap(Variable~Region,scales="free",nrow=3) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 + theme(legend.direction="horizontal", legend.position ="bottom",  legend.title=element_text(size=25), legend.text=element_text(size=25),)
   png(paste(v_path["fig_main"],"/",v_name,"_line_region5.png",sep=""), width=6000, height=6000,res=300)
   print(p)
@@ -728,12 +735,12 @@ f_fig_line4 <- function(df=df_snap, v_name, v_var) {
     geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category,color=Category),alpha=0.4,linewidth=5) +  
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category,color=Category),alpha=0.5,linewidth=5) +  
     facet_wrap(Variable~Unit,scales="free",nrow=1) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)*1800+450, height=1800,res=300)
   print(p)
@@ -758,12 +765,12 @@ f_fig_line5 <- function(df=df_snap, v_name, v_var) {
 #    geom_point(data=df_dummy, aes(x=Year,y=Value), alpha=0)+
     geom_line(data=df_fig1,aes(x=Year,y=Value,group=Scenario_SSP,color=Scenario),linewidth=0.8,alpha=0.9)+
     geom_line(data=df_fig2,aes(x=Year,y=Value,group=interaction(Scenario_SSP,Model),color=Scenario),linewidth=0.2,alpha=0.6,linetype="solid")+
-    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=df_define$color_scenario["LN"]) +
+    geom_ribbon(data=df_fig3,aes(x=Year,ymin=min,ymax=max, group=Scenario,),alpha=0.1,fill=v_col_scenario["LN"]) +
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo5,ymax=up5, group=Category,color=Category),alpha=0.4,linewidth=5) +  
 #    geom_linerange(data=df_fig4,aes(x=Category,ymin=lo25,ymax=up25, group=Category,color=Category),alpha=0.5,linewidth=5) +  
     facet_wrap(Variable~Unit,scales="free",nrow=3) +
     scale_x_discrete(breaks=c(df_define$year1[!is.na(df_define$year1)],df_define$ar6_database[!is.na(df_define$ar6_database)]))+
-    scale_colour_manual(values=c(df_define$color_scenario)) +
+    scale_colour_manual(values=v_col_scenario) +
     ylab("") + xlab("Year") + theme1 
   png(paste(v_path["fig_main"],"/",v_name,"_line.png",sep=""), width=length(v_var)/3*2400+800, height=5200,res=300)
   print(p)
@@ -899,5 +906,25 @@ f_fig_bar1(df_snap, "Agricultural_Production",df_variable$agricultural_productio
 
 
 f_fig_bar2(df=df_snap_cum_change,"Economic_impact_cumulative",df_variable$economic_impact_cumulative[!is.na(df_variable$economic_impact_cumulative)],"Cumulative economic impacts")
+
+## paper figure 7 (ERL revision) ------------------------------------
+#the Economic_indicator line figure above, composed with tagged panels in the
+#common paper style; same data selection as f_fig_line4
+v_fig_paper <- f_paper_dir("../output/figure/paper")
+v_marker <- df_define$marker_scenario[!is.na(df_define$marker_scenario)]
+v_fig7_var <- df_variable$economic_impact[!is.na(df_variable$economic_impact)]
+v_fig7_scen <- f_scen_present(df_snap, v_fig7_var, v_marker, names(v_col_scenario))
+p_fig7_line <- lapply(seq_along(v_fig7_var), function(i) {
+  f_panel_line(df_snap, v_fig7_var[i],
+               c("Carbon price","GDP change from M",
+                 "Consumption change from M")[i],
+               v_col_scenario, v_fig7_scen, v_marker,
+               df_define$year1[!is.na(df_define$year1)],
+               df_dummy = df_dummy, zero_line = TRUE,
+               v_ylab = if (i == 1) NULL else "%")
+})
+p_fig7 <- wrap_plots(p_fig7_line, ncol = 3) + plot_layout(guides = "collect") + f_tags() &
+  theme(legend.position = "bottom", legend.box = "horizontal")
+f_save_paper(p_fig7, "Figure7", 8, v_fig_paper)
 
 

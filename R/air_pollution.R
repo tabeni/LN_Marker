@@ -136,10 +136,9 @@ model_colors <- df_define %>%
 model_labels <- setNames(model_lookup$Model, model_lookup$Model)
 model_labels[c("MESSAGEix-GLOBIOM", "REMIND-MAgPIE")] <- c("MESSAGEix", "REMIND")
 
-scenario_colors <- df_define %>%
-  filter(!is.na(scenario1), scenario1 != "", !is.na(color_scenario), color_scenario != "") %>%
-  distinct(scenario1, .keep_all = TRUE) %>%
-  { setNames(.$color_scenario, .$scenario1) }
+# Common paper style and the shared named scenario palette.
+source(file.path(project_dir, "R", "style_common.R"))
+scenario_colors <- f_pal_scenario(df_define)
 
 expected_prefixes <- c(
   "AIM", "COFFEE", "GCAM", "IMAGE", "MESSAGEix", "REMIND", "WITCH"
@@ -147,7 +146,8 @@ expected_prefixes <- c(
 
 # Pin the ScenarioMIP data release so that the figures are reproducible and the
 # files used in this analysis are explicit in the version-controlled code.
-scenario_data_version <- "20260915"
+# LN_DATA_VERSION selects another release without editing the script.
+scenario_data_version <- Sys.getenv("LN_DATA_VERSION", unset = "20260915")
 
 model_file_pattern <- paste0(
   "^(", paste(expected_prefixes, collapse = "|"), ")(",
@@ -340,17 +340,18 @@ theme_air <- theme_bw(base_size = 12) +
     plot.caption = element_text(size = 9, hjust = 0)
   )
 
-highlight_color <- "#100060"
+highlight_color <- unname(scenario_colors["LN"])
 
 # Figure 1: LN in the context of all available AIM scenarios, with the full
-# SSP2-LN multi-model range shown as a shaded area.
+# SSP2-LN multi-model range shown as a shaded area in the LN colour, as in the
+# other figures.
 p_position <- ggplot() +
   geom_ribbon(
-    data = ln_range,
-    aes(x = Year, ymin = ymin, ymax = ymax, group = Panel),
-    fill = "grey70",
-    alpha = 0.3
+    data = ln_range %>% mutate(Range = v_ln_range_label),
+    aes(x = Year, ymin = ymin, ymax = ymax, group = Panel, fill = Range),
+    alpha = v_ln_range_alpha
   ) +
+  scale_fill_manual(values = setNames(highlight_color, v_ln_range_label), name = NULL) +
   geom_line(
     data = aim_total,
     aes(
@@ -387,7 +388,7 @@ p_position <- ggplot() +
     linetype = "SSP",
     caption = paste0(
       "All panels show World totals on a common decadal time grid. ",
-      "The grey shaded area shows the full SSP2-LN multi-model range; ",
+      "The purple shaded area shows the full SSP2-LN multi-model range; ",
       "AIM-LN is highlighted in purple."
     )
   ) +
@@ -706,6 +707,44 @@ composition_paths <- save_plot(
   width = 17,
   height = 8.5
 )
+
+# Paper figure 6 (ERL revision): the two figures above composed into one file
+# with tagged panels, in the common paper style. Same data; presentation only.
+paper_dir <- f_paper_dir(file.path(project_dir, "output", "figure", "paper"))
+p_paper_a <- p_position
+p_paper_a$layers[[2]]$aes_params$linewidth <- 0.35
+p_paper_a$layers[[3]]$aes_params$linewidth <- 0.8
+# strips with subscripted formulas (e.g. Mt SO2/yr)
+p_paper_a <- p_paper_a +
+  facet_wrap(vars(Panel), scales = "free_y", ncol = 4, labeller = f_chem_labeller(one_line = TRUE)) +
+  labs(caption = NULL, x = NULL, colour = "Scenario (AIM)") +
+  scale_y_continuous(
+    labels = function(x) format(x, big.mark = ",", drop0trailing = TRUE, trim = TRUE),
+    limits = c(0, NA), expand = expansion(mult = c(0, 0.05))
+  ) +
+  guides(
+    colour = guide_legend(order = 1, nrow = 1),
+    linetype = guide_legend(order = 2, nrow = 1, override.aes = list(linewidth = 0.4)),
+    fill = guide_legend(order = 3)
+  ) +
+  theme_paper() +
+  theme(
+    legend.position = "bottom", legend.box = "vertical", legend.box.just = "left",
+    legend.justification = "left", legend.key.width = unit(6, "mm")
+  )
+p_paper_b <- p_composition
+p_paper_b$layers[[2]]$aes_params$linewidth <- 0.35
+p_paper_b <- p_paper_b +
+  facet_wrap(vars(Panel), scales = "free_y", ncol = 4, labeller = f_chem_labeller(one_line = TRUE)) +
+  labs(caption = NULL, x = NULL) +
+  scale_y_continuous(
+    labels = function(x) format(x, big.mark = ",", drop0trailing = TRUE, trim = TRUE),
+    limits = c(0, NA), expand = expansion(mult = c(0, 0.03))
+  ) +
+  theme_paper() +
+  theme(legend.position = "bottom")
+p_paper <- p_paper_a / p_paper_b + f_tags()
+f_save_paper(p_paper, "Figure6", 21, paper_dir)
 
 message("\nCompleted successfully.")
 message("Figures:")

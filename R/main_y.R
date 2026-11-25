@@ -1199,7 +1199,11 @@ f_fig_land_cover_ln_comparison <- function() {
 
 # AIM spatial land-use maps for 2050 and 2100 ----------------------------------
 f_fig_aim_land_grid <- function(v_scenario_ids = NULL) {
-  v_gams_dir <- "C:/GAMS/win64/26.1"
+  v_gams_dir <- Sys.getenv("LN_GAMS_DIR", unset = "C:/GAMS/win64/26.1")
+  # The AIM/PLUM GDX files are large and are not part of the data snapshot;
+  # LN_PLUM_GDX_DIR points to the PLUM output folder (output/gdx/results) and
+  # LN_MAP_GIJ to Map_GIJ.gdx (AIMPLUM/data) when they are not in v_data_dir.
+  v_plum_gdx_dir <- Sys.getenv("LN_PLUM_GDX_DIR", unset = v_data_dir)
   df_aim_scenarios <- tribble(
     ~Scenario_ID, ~Scenario_title, ~GDX_file,
     "SSP1_M", "SSP1 - Medium Emissions",
@@ -1226,7 +1230,7 @@ f_fig_aim_land_grid <- function(v_scenario_ids = NULL) {
     "SSP5_H", "SSP5 - High Emissions",
     "analysis_SSP5_BaU_NoCC_scenarioMIP_global2.gdx"
   ) %>%
-    mutate(GDX_path = file.path(v_data_dir, GDX_file))
+    mutate(GDX_path = file.path(v_plum_gdx_dir, GDX_file))
 
   # Default output is restricted to the nine AIM scenarios actually present
   # in the ScenarioMIP submission CSV. The two 1100C runs remain available by
@@ -1257,7 +1261,7 @@ f_fig_aim_land_grid <- function(v_scenario_ids = NULL) {
     return(invisible(character()))
   }
 
-  v_map_gdx <- file.path(v_data_dir, "Map_GIJ.gdx")
+  v_map_gdx <- Sys.getenv("LN_MAP_GIJ", unset = file.path(v_data_dir, "Map_GIJ.gdx"))
   if (!file.exists(v_map_gdx)) {
     warning("Skipping AIM grid maps: Map_GIJ.gdx is missing.")
     return(invisible(character()))
@@ -1544,6 +1548,9 @@ f_fig_aim_land_grid <- function(v_scenario_ids = NULL) {
     )
     v_output_files <- c(v_output_files, v_combined_files, v_panel_file)
   }
+  # The marker grid data are returned as an attribute for the paper figure.
+  attr(v_output_files, "grid") <- df_grid_all
+  attr(v_output_files, "world") <- df_world
   invisible(v_output_files)
 }
 
@@ -1585,7 +1592,7 @@ f_fig_bar("Land_Cover", df_variable$land_cover[!is.na(df_variable$land_cover)], 
 f_fig_bar("Agricultural_Production", v_agricultural_production, "Agricultural Production")
 f_fig_food_source_area()
 p_land_cover_ln <- f_fig_land_cover_ln_comparison()
-f_fig_aim_land_grid()
+v_aim_grid <- f_fig_aim_land_grid()
 
 # Paper figure 5 (ERL revision) ------------------------------------------------
 # Land-use change, LN land cover by model, and food and agricultural production,
@@ -1643,3 +1650,66 @@ p_fig5 <- p_fig5_a / p_fig5_b /
   (wrap_plots(p_fig5_food, ncol = 3) + plot_layout(guides = "collect")) +
   plot_layout(heights = c(1.15, 1, 0.85)) + f_tags()
 f_save_paper(p_fig5, "Figure5", 23, v_fig_paper)
+
+# Supplementary figure 3 (ERL revision) ----------------------------------------
+# Grid-cell shares of cropland, energy crops and forest in the AIM runs of the
+# marker scenarios, 2050 and 2100. Same data as the AIM_land_grid panel above.
+
+df_si3 <- attr(v_aim_grid, "grid")
+if (!is.null(df_si3) && nrow(df_si3) > 0) {
+  v_si3_scen <- c(SSP3_H = "H", SSP2_M = "M", SSP2_ML = "ML", SSP2_L = "L",
+    SSP1_VL = "VL", SSP2_LN = "LN")
+  df_si3 <- df_si3 %>%
+    filter(as.character(Scenario_ID) %in% names(v_si3_scen)) %>%
+    mutate(
+      Scenario = factor(v_si3_scen[as.character(Scenario_ID)], levels = v_si3_scen),
+      Land_type = factor(as.character(Land_type),
+        levels = c("Cropland", "Energy crops", "Forest"),
+        labels = c("Cropland", "Energy\ncrops", "Forest"))
+    ) %>%
+    filter(I <= 300) # 60S northwards; Antarctica has no cropland or forest
+  # Coastlines thinned to the 0.5-degree grid of the maps (keeps the PDF small).
+  df_si3_world <- attr(v_aim_grid, "world")
+  if (!is.null(df_si3_world)) {
+    df_si3_world <- df_si3_world %>%
+      mutate(map_x = round(map_x), map_y = round(map_y)) %>%
+      group_by(group) %>%
+      filter(map_x != lag(map_x, default = -1) | map_y != lag(map_y, default = -1)) %>%
+      ungroup()
+  }
+  p_si3 <- ggplot(df_si3, aes(x = J, y = I, fill = Value)) +
+    geom_raster() +
+    facet_grid(Year + Land_type ~ Scenario, switch = "y") +
+    scale_fill_viridis_c(
+      option = "C", direction = -1, limits = c(0, 1),
+      oob = scales::squish, breaks = seq(0, 1, 0.25),
+      labels = scales::label_percent(),
+      name = "Share of grid cell"
+    ) +
+    scale_y_reverse() +
+    coord_fixed(xlim = c(0, 720), ylim = c(0, 300), expand = FALSE) +
+    theme_paper() +
+    theme(
+      panel.background = element_rect(fill = "grey92", colour = NA),
+      panel.grid = element_blank(),
+      panel.spacing.x = unit(0.8, "mm"),
+      panel.spacing.y = unit(0.8, "mm"),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      strip.placement = "outside",
+      strip.text.y.left = element_text(angle = 0, hjust = 1),
+      legend.position = "bottom",
+      legend.key.width = unit(12, "mm"),
+      legend.key.height = unit(2, "mm"),
+      legend.title = element_text(vjust = 0.8)
+    )
+  if (!is.null(df_si3_world)) {
+    p_si3 <- p_si3 +
+      geom_path(
+        data = df_si3_world, aes(x = map_x, y = map_y, group = group),
+        inherit.aes = FALSE, colour = "grey25", linewidth = 0.08
+      )
+  }
+  f_save_paper(p_si3, "SupplementaryFigure3", 7.8, v_fig_paper)
+}

@@ -144,10 +144,10 @@ expected_prefixes <- c(
   "AIM", "COFFEE", "GCAM", "IMAGE", "MESSAGEix", "REMIND", "WITCH"
 )
 
-# Pin the ScenarioMIP data release so that the figures are reproducible and the
-# files used in this analysis are explicit in the version-controlled code.
-# LN_DATA_VERSION selects another release without editing the script.
-scenario_data_version <- Sys.getenv("LN_DATA_VERSION", unset = "20260915")
+# The ScenarioMIP data release and other PC-dependent settings are set in one
+# place: R/config.R (defaults) and R/config_local.R (per PC).
+source(file.path(project_dir, "R", "config.R"), chdir = TRUE)
+scenario_data_version <- Sys.getenv("LN_DATA_VERSION")
 
 model_file_pattern <- paste0(
   "^(", paste(expected_prefixes, collapse = "|"), ")(",

@@ -17,9 +17,10 @@ v_script_dir <- if (length(v_file_arg) > 0) {
 }
 v_project_dir <- normalizePath(file.path(v_script_dir, ".."), mustWork = TRUE)
 v_define_dir <- file.path(v_project_dir, "define")
-# Default to the latest data release. Environment variables can still select
-# an older release and output directory without editing this script.
-v_download <- Sys.getenv("LN_MARKER_DOWNLOAD", unset = Sys.getenv("LN_DATA_VERSION", unset = "20260915"))
+# The data release and other PC-dependent settings: R/config.R and
+# R/config_local.R. LN_MARKER_DOWNLOAD still overrides the release here.
+source(file.path(v_script_dir, "config.R"), chdir = TRUE)
+v_download <- Sys.getenv("LN_MARKER_DOWNLOAD", unset = Sys.getenv("LN_DATA_VERSION"))
 v_output_dir <- file.path(
   v_project_dir,
   Sys.getenv(
@@ -1199,7 +1200,7 @@ f_fig_land_cover_ln_comparison <- function() {
 
 # AIM spatial land-use maps for 2050 and 2100 ----------------------------------
 f_fig_aim_land_grid <- function(v_scenario_ids = NULL) {
-  v_gams_dir <- Sys.getenv("LN_GAMS_DIR", unset = "C:/GAMS/win64/26.1")
+  v_gams_dir <- Sys.getenv("LN_GAMS_DIR")  # set in config.R
   # The AIM/PLUM GDX files are large and are not part of the data snapshot;
   # LN_PLUM_GDX_DIR points to the PLUM output folder (output/gdx/results) and
   # LN_MAP_GIJ to Map_GIJ.gdx (AIMPLUM/data) when they are not in v_data_dir.

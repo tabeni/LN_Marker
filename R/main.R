@@ -11,8 +11,9 @@ library(scales)
 #library(gridExtra)
 
 #Setting------------------------------------------------------------------------
-#data release; LN_DATA_VERSION selects another one without editing the script
-v_download <- Sys.getenv("LN_DATA_VERSION", "20260915")
+#PC-dependent settings and the data release: see config.R / config_local.R
+source("config.R", chdir = TRUE)
+v_download <- Sys.getenv("LN_DATA_VERSION")
 
 theme1<-theme(
   panel.background = element_rect(fill = "transparent", colour = "black"),

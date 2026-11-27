@@ -11,8 +11,9 @@ library(scales)
 #library(gridExtra)
 
 #Setting------------------------------------------------------------------------
-#data release; LN_DATA_VERSION selects another one without editing the script
-v_download <- Sys.getenv("LN_DATA_VERSION", "20260803")
+#PC-dependent settings and the data release: see config.R / config_local.R
+source("config.R", chdir = TRUE)
+v_download <- Sys.getenv("LN_DATA_VERSION")
 
 theme1<-theme(
   panel.background=element_rect(fill="transparent", colour="black"),
@@ -926,5 +927,32 @@ p_fig7_line <- lapply(seq_along(v_fig7_var), function(i) {
 p_fig7 <- wrap_plots(p_fig7_line, ncol = 3) + plot_layout(guides = "collect") + f_tags() &
   theme(legend.position = "bottom", legend.box = "horizontal")
 f_save_paper(p_fig7, "Figure7", 8, v_fig_paper)
+
+## supplementary figure 4 (ERL revision) ------------------------------------
+#the Economic_impact_cumulative bar figure above in the paper style, with the unit
+#on the value axis and the bars coloured by scenario. Same data selection as
+#f_fig_bar2; M itself (zero by definition) and runs without an M reference
+#(no bar in the submitted figure) are left out.
+v_si4_var <- df_variable$economic_impact_cumulative[!is.na(df_variable$economic_impact_cumulative)]
+v_si4_lab <- c("Change in Cumulative Consumption" = "Cumulative consumption",
+               "Change in Cumulative GDP|MER"     = "Cumulative GDP (MER)")
+v_scen_model <- df_define$scenario_model[!is.na(df_define$scenario_model)]
+df_si4 <- df_snap_cum_change %>%
+  filter(Year %in% c("2050","2100"), Variable %in% v_si4_var, Region=="World",
+         (Model=="AIM" & Scenario_SSP %in% v_marker) | (Scenario=="LN" & Model!="AIM"),
+         Scenario!="M") %>%
+  mutate(x=factor(paste0(Model,"_",Scenario_SSP), levels=v_scen_model),
+         Variable=factor(Variable, levels=v_si4_var),
+         Scenario=factor(Scenario, levels=names(v_col_scenario)))
+p_si4 <- ggplot(df_si4, aes(x=x, y=Value, fill=Scenario)) +
+  f_zero_line() +
+  geom_col(width=0.8, alpha=0.9) +
+  facet_grid(Variable~Year, labeller=labeller(Variable=v_si4_lab)) +
+  scale_fill_manual(values=v_col_scenario, name="Scenario", drop=TRUE) +
+  scale_x_discrete(labels=function(x) str_replace(str_replace(str_replace(x, "MESSAGEix-GLOBIOM", "MESSAGEix"),
+                                                               "REMIND-MAgPIE", "REMIND"), "_", " ")) +
+  labs(x=NULL, y="Change from the M scenario (%)") +
+  theme_paper() + theme_x90() + theme(panel.grid.major.x=element_blank())
+f_save_paper(p_si4, "SupplementaryFigure4", 11, v_fig_paper)
 
 

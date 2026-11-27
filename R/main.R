@@ -11,8 +11,9 @@ library(scales)
 #library(gridExtra)
 
 #Setting------------------------------------------------------------------------
-#data release; LN_DATA_VERSION selects another one without editing the script
-v_download <- Sys.getenv("LN_DATA_VERSION", "20260915")
+#PC-dependent settings and the data release: see config.R / config_local.R
+source("config.R", chdir = TRUE)
+v_download <- Sys.getenv("LN_DATA_VERSION")
 
 theme1<-theme(
   panel.background = element_rect(fill = "transparent", colour = "black"),
@@ -293,7 +294,12 @@ df_series <- data.frame(Series = c("SSP2_LN (AIM, marker)","SSP1_VL (REMIND, mar
                         stringsAsFactors = FALSE)
 #the scenario colours come from the named vector v_col_scenario defined above
 #the third series is a lighter tint of VL, to read as a variant of the same scenario
-v_col_series <- setNames(c(v_col_scenario["LN"],v_col_scenario["VL"],"#7fbde6"),
+#(a 50% mix with white, derived from the VL colour so that it follows define.csv)
+f_tint <- function(v_col, v_w=0.5) {
+  v_rgb <- grDevices::col2rgb(v_col)[,1]*(1-v_w) + 255*v_w
+  grDevices::rgb(v_rgb[1], v_rgb[2], v_rgb[3], maxColorValue=255)
+}
+v_col_series <- setNames(c(v_col_scenario["LN"],v_col_scenario["VL"],f_tint(v_col_scenario["VL"])),
                          df_series$Series)
 
 f_read_clim <- function(v_kind) {
@@ -1124,5 +1130,74 @@ p_fig8_line[[6]] <- f_panel_line(df_snap, v_fig8_var[6], "Electricity price", v_
                                  v_drop_model = "WITCH")
 p_fig8 <- wrap_plots(p_fig8_line, ncol = 3) + plot_layout(guides = "collect") + f_tags() & f_legend_bottom()
 f_save_paper(p_fig8, "Figure8", 13, v_fig_paper)
+
+#Supplementary figures (ERL revision)-------------------------------------------
+#Supplementary Figures 1, 2 and 5 in the same style as the paper figures: units on
+#every value axis and subscripted chemical formulas. Same data as the functions
+#f_fig_line6, f_fig_bar and f_fig_forcing_* above.
+
+#Supplementary Figure 1: CDR and geological storage of the LN runs, by model
+v_si1_title <- c("Carbon dioxide removal","Cumulative carbon dioxide removal",
+                 "Geological CO2 storage","Cumulative geological CO2 storage")
+#one model list for all panels, so that the four legends are identical and merge
+v_si1_models <- names(v_col_model)[names(v_col_model) %in%
+  unique(df_snap$Model[df_snap$Variable %in% v_fig3_var & df_snap$Scenario=="LN" & df_snap$Region=="World"])]
+p_si1 <- lapply(seq_along(v_fig3_var), function(i) {
+  df1 <- df_snap%>%
+    filter(Variable==v_fig3_var[i], Scenario=="LN", Region=="World")%>%
+    mutate(Model=factor(Model, levels=names(v_col_model)))
+  ggplot(df1, aes(x=Year, y=Value, group=Model, colour=Model)) +
+    f_zero_line() +
+    geom_line(linewidth=v_aim_linewidth) +
+    scale_colour_manual(values=v_col_model, limits=v_si1_models, name="Model (LN scenario)") +
+    scale_x_discrete(breaks=v_year_breaks) +
+    labs(title=f_chem_lab(v_si1_title[i]), x=NULL, y=f_chem_lab(unique(df1$Unit)[1])) +
+    guides(colour=guide_legend(override.aes=list(linewidth=0.8))) +
+    theme_paper() +
+    #COFFEE has no geological storage, so the keys of (c)/(d) differ and would
+    #not merge; the legend of (a), which has every model, is the one shown
+    (if (i > 1) theme(legend.position="none") else theme())
+})
+p_si1 <- wrap_plots(p_si1, ncol = 2) + plot_layout(guides = "collect") + f_tags()
+f_save_paper(p_si1, "SupplementaryFigure1", 12, v_fig_paper)
+
+#Supplementary Figure 2: final energy by carrier, AIM scenarios and other models' LN
+v_si2_fe <- df_variable$final_energy_source[!is.na(df_variable$final_energy_source)]
+p_si2 <- f_panel_bar(df_snap, v_si2_fe, "Final Energy", v_marker, v_scen_model,
+                     f_pal_fill(v_si2_fe), str_remove(v_si2_fe, "^Final Energy\\|"),
+                     "Final energy carrier", "EJ/yr") +
+  scale_x_discrete(labels = f_lab_bar)
+f_save_paper(p_si2, "SupplementaryFigure2", 9, v_fig_paper)
+
+#Supplementary Figure 5: ERF by component over time, and at the peak-warming year
+p_si5_area <- ggplot() +
+  geom_col(data=df_erf, aes(x=Year, y=Value, fill=Component), width=1, alpha=0.9) +
+  geom_line(data=df_erf_tot, aes(x=Year, y=Value, linetype="Total anthropogenic"), colour="black", linewidth=0.4) +
+  geom_vline(data=df_peak, aes(xintercept=peak_year), linetype="longdash", colour="black", linewidth=0.3) +
+  geom_text(data=df_peak, aes(x=peak_year, y=-Inf, label=paste0("peak ", peak_year)),
+            angle=90, hjust=-0.1, vjust=-0.5, size=2) +
+  f_zero_line() +
+  facet_wrap(~Series, nrow=1) +
+  scale_fill_manual(values=v_col_erf, name="Component", labels=function(b) f_chem_lab(b)) +
+  scale_linetype_manual(values="solid", name=NULL) +
+  scale_x_continuous(breaks=seq(2020, 2100, 20)) +
+  labs(x=NULL, y=expression(paste("ERF (W ", m^-2, ")"))) +
+  guides(fill=guide_legend(order=1), linetype=guide_legend(order=2)) +
+  theme_paper() + theme_x90()
+v_si5_panel <- c("ERF at each scenario's peak-warming year","Difference (LN - VL) at the peak-warming year")
+df_si5 <- bind_rows(df_erf_peak%>%select(Component,Series,Value)%>%mutate(Panel=v_si5_panel[1]),
+                    df_erf_diff%>%mutate(Panel=v_si5_panel[2]))%>%
+  mutate(Panel=factor(Panel, levels=v_si5_panel),
+         Series=factor(Series, levels=c(df_series$Series, v_lab_diff)))
+p_si5_bar <- ggplot(df_si5, aes(x=Component, y=Value, fill=Series)) +
+  f_zero_line() +
+  geom_col(position=position_dodge(width=0.8, preserve="single"), width=0.7, alpha=0.9) +
+  facet_wrap(~Panel, nrow=1, scales="free_y") +
+  scale_fill_manual(values=c(v_col_series, v_col_diff), name="Scenario") +
+  scale_x_discrete(labels=function(b) f_chem_lab(b)) +
+  labs(x=NULL, y=expression(paste("ERF (W ", m^-2, ")"))) +
+  theme_paper() + theme_x90() + theme(panel.grid.major.x=element_blank())
+p_si5 <- p_si5_area / p_si5_bar + plot_layout(heights = c(1, 1)) + f_tags()
+f_save_paper(p_si5, "SupplementaryFigure5", 16, v_fig_paper)
 
 
